@@ -1,0 +1,147 @@
+{
+  "merchants": [
+    {
+      "id": "m_default",
+      "name": "测试加盟店"
+    }
+  ],
+  "stores": [
+    {
+      "id": "s1",
+      "merchant_id": "m_default",
+      "name": "旗舰店"
+    },
+    {
+      "id": "s2",
+      "merchant_id": "m_default",
+      "name": "分店01"
+    },
+    {
+      "id": "s3",
+      "merchant_id": "m_default",
+      "name": "分店02"
+    }
+  ],
+  "products": [
+    {
+      "id": "1",
+      "merchant_id": "m_default",
+      "name": "矿泉水",
+      "price": "2.50"
+    },
+    {
+      "id": "10",
+      "merchant_id": "m_default",
+      "name": "薯片",
+      "price": "8.00"
+    },
+    {
+      "id": "11",
+      "merchant_id": "m_default",
+      "name": "巧克力",
+      "price": "12.00"
+    },
+    {
+      "id": "12",
+      "merchant_id": "m_default",
+      "name": "口香糖",
+      "price": "5.00"
+    },
+    {
+      "id": "13",
+      "merchant_id": "m_default",
+      "name": "纸巾",
+      "price": "3.00"
+    },
+    {
+      "id": "14",
+      "merchant_id": "m_default",
+      "name": "电池",
+      "price": "10.00"
+    },
+    {
+      "id": "15",
+      "merchant_id": "m_default",
+      "name": "打火机",
+      "price": "2.00"
+    },
+    {
+      "id": "2",
+      "merchant_id": "m_default",
+      "name": "可乐",
+      "price": "3.00"
+    },
+    {
+      "id": "3",
+      "merchant_id": "m_default",
+      "name": "雪碧",
+      "price": "3.00"
+    },
+    {
+      "id": "4",
+      "merchant_id": "m_default",
+      "name": "橙汁",
+      "price": "5.00"
+    },
+    {
+      "id": "5",
+      "merchant_id": "m_default",
+      "name": "咖啡",
+      "price": "12.00"
+    },
+    {
+      "id": "6",
+      "merchant_id": "m_default",
+      "name": "奶茶",
+      "price": "10.00"
+    },
+    {
+      "id": "7",
+      "merchant_id": "m_default",
+      "name": "面包",
+      "price": "6.00"
+    },
+    {
+      "id": "8",
+      "merchant_id": "m_default",
+      "name": "三明治",
+      "price": "15.00"
+    },
+    {
+      "id": "9",
+      "merchant_id": "m_default",
+      "name": "泡面",
+      "price": "5.50"
+    },
+    {
+      "id": "inventory_regression_1775551777172",
+      "merchant_id": "m_default",
+      "name": "Inventory Regression Product Updated",
+      "price": "12.00"
+    },
+    {
+      "id": "p_smoke_dummy",
+      "merchant_id": "m_default",
+      "name": "P4 Smoke Product",
+      "price": "99.90"
+    },
+    {
+      "id": "p4_smoke_product_1775445629698",
+      "merchant_id": "m_default",
+      "name": "P4 Smoke Product",
+      "price": "99.90"
+    },
+    {
+      "id": "p4_smoke_product_1775551700285",
+      "merchant_id": "m_default",
+      "name": "P4 Smoke Product",
+      "price": "99.90"
+    },
+    {
+      "id": "phase4_manual_1775445149760",
+      "merchant_id": "m_default",
+      "name": "Phase4 Manual Product",
+      "price": "19.90"
+    }
+  ]
+}

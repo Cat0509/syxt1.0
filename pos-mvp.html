@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>商店收银 MVP</title>
+  <link rel="stylesheet" href="pos-mvp.css" />
+</head>
+<body>
+  <header class="pm-header" style="padding:12px 16px;">
+    <div class="pm-title">商店收银 MVP</div>
+    <div class="pm-subtitle" style="color:#666;font-size:0.9rem;margin-top:4px;">简易、可扩展的收银网页</div>
+  </header>
+  <main class="pm-layout" style="display:grid;grid-template-columns:1fr 420px;gap:16px;padding:16px;">
+    <section class="pm-products" style="background:#fff;border:1px solid #e6e6e6;border-radius:10px;padding:12px;">
+      <div class="pm-search" style="margin-bottom:8px;">
+        <input id="pmSearch" placeholder="搜索商品..." style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;">
+      </div>
+      <div id="pmProductsGrid" class="pm-grid"></div>
+    </section>
+    <section class="pm-cart" style="background:#fff;border:1px solid #e6e6e6;border-radius:10px;padding:12px;">
+      <h3 style="margin:0 0 8px 0;font-size:1.05rem;">购物车</h3>
+      <div id="pmCartList" class="pm-cart-list" style="min-height:120px;">
+        <div class="pm-empty" id="pmCartEmpty" style="text-align:center;padding:24px 0;">购物车为空，添加商品后显示</div>
+      </div>
+      <div class="pm-totals" style="margin-top:12px;line-height:1.6;">
+        <div>小计: ¥<span id="pmSubtotal">0.00</span></div>
+        <div>税费(8%): ¥<span id="pmTax">0.00</span></div>
+        <div class="pm-total" style="font-weight:700;">总计: ¥<span id="pmTotal">0.00</span></div>
+      </div>
+      <button id="pmCheckout" class="pm-btn" style="width:100%;margin-top:6px;background:#0b5ed7;border:none;border-radius:6px;">结账</button>
+      <button id="pmClearCart" class="pm-btn pm-btn-secondary" style="width:100%;margin-top:6px;border:1px solid #ddd;border-radius:6px;background:#f7f7f7;">清空购物车</button>
+    </section>
+  </main>
+  <div id="pmReceiptModal" class="pm-modal" aria-hidden="true" style="align-items:center;justify-content:center;">
+    <div class="pm-modal-content" style="min-width:320px;">
+      <h4>收据</h4>
+      <div id="pmReceiptBody" class="pm-receipt-body" style="max-height:260px;overflow:auto;background:#f6f6f6;padding:10px;border-radius:6px;margin-bottom:8px;"></div>
+      <button id="pmPrintBtn" class="pm-btn" style="width:100%;margin-bottom:6px;">打印收据</button>
+      <button id="pmNewOrder" class="pm-btn pm-btn-secondary" style="width:100%;">新订单</button>
+    </div>
+  </div>
+  <script src="pos-mvp.js"></script>
+</body>
+</html>

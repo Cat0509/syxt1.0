@@ -1,0 +1,295 @@
+{
+  "inventory": [
+    {
+      "id": "inv_p_1_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "1",
+      "sku_id": "",
+      "stock": 18,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_10_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "10",
+      "sku_id": "",
+      "stock": 50,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_11_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "11",
+      "sku_id": "",
+      "stock": 50,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_12_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "12",
+      "sku_id": "",
+      "stock": 200,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_13_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "13",
+      "sku_id": "",
+      "stock": 100,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_14_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "14",
+      "sku_id": "",
+      "stock": 100,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_15_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "15",
+      "sku_id": "",
+      "stock": 100,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_2_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "2",
+      "sku_id": "",
+      "stock": 99,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_3_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "3",
+      "sku_id": "",
+      "stock": 100,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_4_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "4",
+      "sku_id": "",
+      "stock": 100,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_5_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "5",
+      "sku_id": "",
+      "stock": 100,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_6_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "6",
+      "sku_id": "",
+      "stock": 100,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_7_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "7",
+      "sku_id": "",
+      "stock": 48,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_8_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "8",
+      "sku_id": "",
+      "stock": 50,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_9_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "9",
+      "sku_id": "",
+      "stock": 50,
+      "updated_at": 1775553061180
+    },
+    {
+      "id": "inv_p_inventory_regression_1775551777172_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "inventory_regression_1775551777172",
+      "sku_id": "",
+      "stock": 4,
+      "updated_at": 1775552061850
+    },
+    {
+      "id": "inv_p_inventory_regression_1775551777172_s2",
+      "merchant_id": "m_default",
+      "store_id": "s2",
+      "product_id": "inventory_regression_1775551777172",
+      "sku_id": "",
+      "stock": 7,
+      "updated_at": 1775551777352
+    },
+    {
+      "id": "inv_p_p_smoke_dummy_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "p_smoke_dummy",
+      "sku_id": "",
+      "stock": 0,
+      "updated_at": 1775552061891
+    },
+    {
+      "id": "inv_p_p4_smoke_product_1775445629698_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "p4_smoke_product_1775445629698",
+      "sku_id": "",
+      "stock": 4,
+      "updated_at": 1775552061881
+    },
+    {
+      "id": "inv_p_p4_smoke_product_1775551700285_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "p4_smoke_product_1775551700285",
+      "sku_id": "",
+      "stock": 4,
+      "updated_at": 1775552061862
+    },
+    {
+      "id": "inv_p_phase4_manual_1775445149760_s1",
+      "merchant_id": "m_default",
+      "store_id": "s1",
+      "product_id": "phase4_manual_1775445149760",
+      "sku_id": "",
+      "stock": 4,
+      "updated_at": 1775552061871
+    }
+  ],
+  "products": [
+    {
+      "id": "1",
+      "name": "矿泉水",
+      "stock": 18
+    },
+    {
+      "id": "10",
+      "name": "薯片",
+      "stock": 50
+    },
+    {
+      "id": "11",
+      "name": "巧克力",
+      "stock": 50
+    },
+    {
+      "id": "12",
+      "name": "口香糖",
+      "stock": 200
+    },
+    {
+      "id": "13",
+      "name": "纸巾",
+      "stock": 100
+    },
+    {
+      "id": "14",
+      "name": "电池",
+      "stock": 100
+    },
+    {
+      "id": "15",
+      "name": "打火机",
+      "stock": 100
+    },
+    {
+      "id": "2",
+      "name": "可乐",
+      "stock": 99
+    },
+    {
+      "id": "3",
+      "name": "雪碧",
+      "stock": 100
+    },
+    {
+      "id": "4",
+      "name": "橙汁",
+      "stock": 100
+    },
+    {
+      "id": "5",
+      "name": "咖啡",
+      "stock": 100
+    },
+    {
+      "id": "6",
+      "name": "奶茶",
+      "stock": 100
+    },
+    {
+      "id": "7",
+      "name": "面包",
+      "stock": 48
+    },
+    {
+      "id": "8",
+      "name": "三明治",
+      "stock": 50
+    },
+    {
+      "id": "9",
+      "name": "泡面",
+      "stock": 50
+    },
+    {
+      "id": "inventory_regression_1775551777172",
+      "name": "Inventory Regression Product Updated",
+      "stock": 0
+    },
+    {
+      "id": "p_smoke_dummy",
+      "name": "P4 Smoke Product",
+      "stock": 0
+    },
+    {
+      "id": "p4_smoke_product_1775445629698",
+      "name": "P4 Smoke Product",
+      "stock": 0
+    },
+    {
+      "id": "p4_smoke_product_1775551700285",
+      "name": "P4 Smoke Product",
+      "stock": 0
+    },
+    {
+      "id": "phase4_manual_1775445149760",
+      "name": "Phase4 Manual Product",
+      "stock": 0
+    }
+  ]
+}

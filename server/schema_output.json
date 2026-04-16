@@ -1,0 +1,68 @@
+{
+  "txCols": [
+    {
+      "Field": "business_date",
+      "Type": "bigint(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "offline_id",
+      "Type": "varchar(50)",
+      "Null": "YES",
+      "Key": "UNI",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "offline_cash_collected",
+      "Type": "decimal(10,2)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0.00",
+      "Extra": ""
+    },
+    {
+      "Field": "offline_payment_pending",
+      "Type": "tinyint(1)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    }
+  ],
+  "itemCols": [
+    {
+      "Field": "price_snapshot",
+      "Type": "decimal(10,2)",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    }
+  ],
+  "migrations": [
+    {
+      "id": 1,
+      "name": "001_initial_schema.sql",
+      "executed_at": "2026-04-06T02:30:56.000Z"
+    },
+    {
+      "id": 2,
+      "name": "002_add_migration_tracking.sql",
+      "executed_at": "2026-04-06T02:30:56.000Z"
+    },
+    {
+      "id": 3,
+      "name": "003_decouple_inventory.js",
+      "executed_at": "2026-04-06T02:30:56.000Z"
+    },
+    {
+      "id": 4,
+      "name": "20260401_offline_base.js",
+      "executed_at": "2026-04-06T02:30:57.000Z"
+    }
+  ]
+}

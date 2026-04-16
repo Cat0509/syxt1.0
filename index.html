@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="如意收银 - 专业的零售级 POS 收银系统，支持商品管理、购物车、结账与数据统计" />
+  <meta name="keywords" content="POS,收银系统,零售,商品管理" />
+  <title>如意收银 | 专业 POS 收银系统</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .sync-status {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 12px;
+      margin-left: auto;
+    }
+
+    .sync-status.online {
+      color: #2ecc71;
+      background: rgba(46, 204, 113, 0.1);
+    }
+
+    .sync-status.offline {
+      color: #95a5a6;
+      background: rgba(149, 165, 166, 0.1);
+    }
+  </style>
+</head>
+
+<body>
+  <!-- 系统初始化界面遮罩 -->
+  <div id="initOverlay" class="login-overlay" style="display:none;">
+    <div class="login-card">
+      <div class="login-header">
+        <h1>系统初始化</h1>
+        <p>欢迎使用如意收银！请完成首次配置以开始使用。</p>
+      </div>
+      <form id="initForm">
+        <div class="form-group">
+          <label for="initMerchantName">商户/公司名称</label>
+          <input type="text" id="initMerchantName" placeholder="例如：如意零售集团" required>
+        </div>
+        <div class="form-group">
+          <label for="initAdminName">超级管理员姓名</label>
+          <input type="text" id="initAdminName" placeholder="您的真实姓名" required>
+        </div>
+        <div class="form-group">
+          <label for="initUsername">管理员登录账号</label>
+          <input type="text" id="initUsername" placeholder="建议使用 admin" required>
+        </div>
+        <div class="form-group">
+          <label for="initPassword">管理员登录密码</label>
+          <input type="password" id="initPassword" placeholder="请设置强密码" required>
+        </div>
+        <div class="form-group">
+          <label for="initStoreName">首家门店名称</label>
+          <input type="text" id="initStoreName" placeholder="例如：旗舰店" required>
+        </div>
+        <div class="form-group">
+          <label for="initDeviceName">当前收银机名称</label>
+          <input type="text" id="initDeviceName" placeholder="例如：1号收银台" value="默认收银机">
+        </div>
+        <button type="submit" id="btnDoInit" class="btn btn-primary btn-block">完成初始化并进入系统</button>
+      </form>
+      <div id="initError" class="login-error-msg"></div>
+    </div>
+  </div>
+
+  <!-- 登录界面遮罩 -->
+  <div id="loginOverlay" class="login-overlay">
+    <div class="login-card">
+      <div class="login-header">
+        <h1>如意收银</h1>
+        <p>请登录系统继续操作</p>
+      </div>
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="merchantId">商户号</label>
+          <input type="text" id="merchantId" placeholder="输入商户号" required>
+        </div>
+        <div class="form-group">
+          <label for="username">用户名</label>
+          <input type="text" id="username" placeholder="输入用户名" required autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="password">密码</label>
+          <input type="password" id="password" placeholder="输入密码" required autocomplete="current-password">
+        </div>
+        <button type="submit" id="btnLogin" class="btn btn-primary btn-block">立即登录</button>
+      </form>
+
+      <!-- 新增：注册表单 (默认隐藏) -->
+      <form id="registerForm" style="display:none;">
+        <div class="form-group">
+          <label for="regShopName">店名/商户名</label>
+          <input type="text" id="regShopName" placeholder="例如：如意超市旗舰店" required>
+        </div>
+        <div class="form-group">
+          <label for="regName">负责人姓名</label>
+          <input type="text" id="regName" placeholder="您的真实姓名" required>
+        </div>
+        <div class="form-group">
+          <label for="regUsername">登录账号</label>
+          <input type="text" id="regUsername" placeholder="建议使用手机号或拼音" required>
+        </div>
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label for="regPassword">登录密码</label>
+          <input type="password" id="regPassword" placeholder="至少6位字符" required>
+        </div>
+        <button type="submit" id="btnDoRegister" class="btn btn-primary btn-block">创建账号并开店</button>
+      </form>
+
+      <div id="loginError" class="login-error-msg"></div>
+      <div class="login-footer">
+        <a href="#" id="btnShowRegister">没有账号？立即注册开店 &raquo;</a>
+        <a href="#" id="btnShowLogin" style="display:none;">已有账号？返回登录 &raquo;</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <!-- 主内容区 -->
+    <div class="main-content">
+      <!-- 收银页面 -->
+      <section id="posSection" class="active">
+        <div class="pos-container">
+          <!-- 左侧：商品区 -->
+          <div class="products-area">
+            <div class="search-bar">
+              <input type="text" id="searchInput" placeholder="搜索商品名称或条码..." />
+            </div>
+            <div id="categories" class="categories"></div>
+            <div id="productsGrid" class="products-grid"></div>
+          </div>
+
+          <!-- 右侧：购物车 -->
+          <div class="cart-area">
+            <h2>购物车</h2>
+            <table class="cart-table">
+              <thead>
+                <tr>
+                  <th>商品</th>
+                  <th>单价</th>
+                  <th>数量</th>
+                  <th>小计</th>
+                </tr>
+              </thead>
+              <tbody id="cartList"></tbody>
+            </table>
+            <div class="cart-footer">
+              <div id="totalSummary" class="total-summary">共0件 总计¥0.00</div>
+              <div class="cart-actions">
+                <button id="btnAddTemp" class="btn btn-secondary">添加临时商品</button>
+                <button id="btnSettle" class="btn btn-primary">结账</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 今日统计 -->
+        <div class="stats-bar">
+          <div id="todayCount">今日收银 0 笔</div>
+          <div id="lastOrderText">上一单共0件商品 ¥0.00</div>
+          <div class="month-progress-container">
+            <span>本月目标：<span id="monthCurrent">0</span>/<span id="monthTarget">9000</span></span>
+            <div class="progress-bar">
+              <div id="monthProgress" class="progress-fill"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 添加/编辑商品页面 -->
+      <section id="addProductSection">
+        <h2>添加商品</h2>
+        <form id="addProductForm" class="product-form">
+          <div class="form-group">
+            <label for="productName">商品名称</label>
+            <input type="text" id="productName" required />
+          </div>
+          <div class="form-group">
+            <label for="productPrice">价格</label>
+            <input type="number" id="productPrice" step="0.01" min="0" required />
+          </div>
+          <div class="form-group">
+            <label for="productStock">库存数量</label>
+            <input type="number" id="productStock" min="0" value="9999" required />
+          </div>
+          <div class="form-group">
+            <label for="productBarcode">条码（可选）</label>
+            <input type="text" id="productBarcode" placeholder="扫描或输入商品条码" />
+          </div>
+          <div class="form-group">
+            <label for="productCategory">分类</label>
+            <select id="productCategory"></select>
+          </div>
+          <div class="form-group">
+            <input type="text" id="productCategoryNew" class="input-new-cat input-new-cat--hidden"
+              placeholder="输入新分类名称" />
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">添加商品</button>
+            <button type="reset" class="btn btn-secondary">重置</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- 商品管理页面 -->
+      <section id="productsSection">
+        <div class="view-header">
+          <h2>商品管理</h2>
+          <button id="btnInventoryAdjust" class="btn btn-outline" style="display:none; border:1px solid var(--primary); color:var(--primary); background:transparent; padding:6px 14px; font-size:0.875rem;">📦 库存调整</button>
+        </div>
+        <div class="search-bar">
+          <input type="text" id="productsSearch" placeholder="搜索商品..." />
+        </div>
+        <div id="productsPageCategories" class="categories"></div>
+        <div id="productsPageGrid" class="products-grid"></div>
+      </section>
+
+      <!-- 交易历史页面 -->
+      <section id="historySection">
+        <h2>交易历史</h2>
+        <div class="history-container">
+          <div class="history-filters">
+            <input type="text" id="historySearch" placeholder="搜索商品名称..." class="search-input" />
+            <select id="historyDateFilter" class="date-filter-select">
+              <option value="all">全部时间</option>
+              <option value="today">今天</option>
+              <option value="week">本周</option>
+              <option value="month">本月</option>
+            </select>
+          </div>
+          <div id="historyList" class="history-list"></div>
+          <div id="historyPagination" class="history-pagination" style="display:none; text-align:center; padding:1rem;">
+            <button id="btnLoadMoreHistory" class="btn btn-outline" style="width:200px;">加载更多</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 退款审批页面 (店长/管理员专用) -->
+      <section id="refundsSection">
+        <h2>退款审批</h2>
+        <div class="history-container">
+          <div class="history-filters">
+            <select id="refundsStatusFilter" class="date-filter-select">
+              <option value="requested">待审批</option>
+              <option value="approved">已同意</option>
+              <option value="rejected">已驳回</option>
+              <option value="">全部状态</option>
+            </select>
+             <!-- 为管理员保留门店筛选 -->
+             <select id="refundsStoreFilter" class="date-filter-select" style="display:none;">
+               <option value="">全部门店</option>
+             </select>
+          </div>
+          <div id="refundsList" class="history-list"></div>
+        </div>
+      </section>
+      <!-- 报表页面 -->
+      <section id="reportSection">
+        <h2>数据报表</h2>
+
+        <!-- 日期筛选器 -->
+        <div class="date-filter-container">
+          <div class="date-filter-row">
+            <select id="filterYear" class="date-select">
+              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+            </select>
+            <select id="filterMonth" class="date-select">
+              <option value="0">全年</option>
+              <option value="1">1月</option>
+              <option value="2">2月</option>
+              <option value="3">3月</option>
+              <option value="4">4月</option>
+              <option value="5">5月</option>
+              <option value="6">6月</option>
+              <option value="7">7月</option>
+              <option value="8">8月</option>
+              <option value="9">9月</option>
+              <option value="10">10月</option>
+              <option value="11">11月</option>
+              <option value="12">12月</option>
+            </select>
+            <select id="filterDay" class="date-select">
+              <option value="0">全月</option>
+            </select>
+            <button id="btnRecord" class="btn-record">记录</button>
+          </div>
+        </div>
+
+        <!-- 主要数据卡片 -->
+        <div class="main-stats-grid">
+          <div class="main-stat-card">
+            <div class="stat-icon">💰</div>
+            <div class="stat-content">
+              <div class="stat-label">销售额</div>
+              <div class="stat-value" id="mainSalesAmount">0.00</div>
+            </div>
+          </div>
+          <div class="main-stat-card">
+            <div class="stat-icon">📦</div>
+            <div class="stat-content">
+              <div class="stat-label">销售数量</div>
+              <div class="stat-value" id="mainSalesCount">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 详细统计 -->
+        <div class="detail-stats-container">
+          <h3>详细统计</h3>
+          <div class="report-grid">
+            <div class="report-card">
+              <h3>今日</h3>
+              <div class="report-value" id="reportTodayAmount">¥ 0.00</div>
+              <div class="report-label" id="reportTodayCount">0 笔</div>
+            </div>
+            <div class="report-card">
+              <h3>本周</h3>
+              <div class="report-value" id="reportWeekAmount">¥ 0.00</div>
+              <div class="report-label" id="reportWeekCount">0 笔</div>
+            </div>
+            <div class="report-card">
+              <h3>本月</h3>
+              <div class="report-value" id="reportMonthAmount">¥ 0.00</div>
+              <div class="report-label" id="reportMonthCount">0 笔</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 销售额趋势图 -->
+        <div class="chart-container">
+          <h3>销售额趋势</h3>
+          <div class="chart-legend">
+            <span class="legend-item">
+              <span class="legend-color" style="background:#1989fa"></span>
+              销售额 (¥)
+            </span>
+          </div>
+          <div id="reportSalesChart" class="sales-chart"></div>
+        </div>
+
+        <!-- 24小时交易趋势 -->
+        <div class="chart-container">
+          <h3>24小时交易趋势</h3>
+          <div id="reportHourlyChart" class="hourly-chart"></div>
+        </div>
+
+        <div class="report-row" style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-top:2rem;">
+          <div class="chart-container">
+            <h3>热销排行 (TOP 5)</h3>
+            <div id="reportProductRanking"></div>
+          </div>
+          <div class="chart-container">
+            <h3>员工表现</h3>
+            <div id="reportStaffRanking"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 收银员简易报表 -->
+      <section id="cashierReportSection">
+        <h2>今日营收统计</h2>
+        <div class="main-stats-grid">
+          <div class="main-stat-card" style="background: linear-gradient(135deg, #1989fa 0%, #0d7de8 100%);">
+            <div class="stat-icon">💰</div>
+            <div class="stat-content">
+              <div class="stat-label">今日总额</div>
+              <div class="stat-value" id="cashierTodayAmount">0.00</div>
+            </div>
+          </div>
+          <div class="main-stat-card" style="background: linear-gradient(135deg, #07c160 0%, #05a050 100%);">
+            <div class="stat-icon">📑</div>
+            <div class="stat-content">
+              <div class="stat-label">今日订单</div>
+              <div class="stat-value" id="cashierTodayCount">0</div>
+            </div>
+          </div>
+        </div>
+        <div
+          style="margin-top:2rem; padding:1.5rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-muted); font-size:0.9rem;">
+          <p>💡 提示：如需查看更详细的历史统计或报表，请联系管理员。</p>
+        </div>
+      </section>
+
+      <!-- 团队报表 (店长可见) -->
+      <section id="teamReportSection">
+        <div class="view-header">
+          <h2>团队今日战报</h2>
+          <button id="btnAddSubordinate" class="btn btn-primary">添加员工</button>
+        </div>
+        <div id="teamReportGrid" class="team-stats-grid">
+          <!-- 动态加载下属数据 -->
+        </div>
+      </section>
+
+      <!-- 系统设置页面 -->
+      <section id="settingsSection">
+        <h2>系统设置</h2>
+        <div class="settings-container" style="max-width: 800px; margin: 0 auto;">
+          <div class="settings-card"
+            style="background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; margin-bottom:1.5rem;">
+            <h3>💾 数据备份与恢复</h3>
+            <p style="color:var(--text-muted); margin-bottom:1rem;">
+              定期备份数据是个好习惯。备份文件包含了您的所有商品信息和历史交易记录。
+            </p>
+            <div style="display:flex; gap:1rem;">
+              <button id="btnExportBackup" class="btn btn-primary" style="flex:1;">
+                导出全量备份 (JSON)
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-card"
+            style="background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; margin-bottom:1.5rem;">
+            <h3>📊 报表导出</h3>
+            <p style="color:var(--text-muted); margin-bottom:1rem;">
+              将交易记录导出为 Excel 可识别的 CSV 格式，方便您进行更细致的财务分析。
+            </p>
+            <div style="display:flex; gap:1rem;">
+              <button id="btnExportCSV" class="btn btn-outline"
+                style="flex:1; border:1px solid var(--primary); color:var(--primary); background:transparent;">
+                导出交易记录 (Excel/CSV)
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-footer" style="text-align:center; color:var(--text-muted); margin-top:3rem;">
+            <p>如意收银系统 v1.0</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 对账中心页面 (管理员/店长) -->
+      <section id="reconciliationSection">
+        <div class="view-header">
+          <h2>对账中心</h2>
+          <div class="date-filter-row">
+            <input type="date" id="reconStartDate" class="date-select" style="width:auto;">
+            <input type="date" id="reconEndDate" class="date-select" style="width:auto;">
+            <button id="btnReconFilter" class="btn btn-primary" style="padding:6px 16px;">查询</button>
+          </div>
+        </div>
+        <div class="history-container">
+          <table class="cart-table">
+            <thead>
+              <tr>
+                <th>门店名称</th>
+                <th>订单数</th>
+                <th>应收总额</th>
+                <th>实缴总额</th>
+                <th>退款总额</th>
+                <th>差异</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="reconTableBody">
+              <!-- JS 填充 -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 对账明细模态框 -->
+      <div id="reconDetailsModal" class="modal-backdrop">
+        <div class="modal-content" style="max-width: 900px;">
+          <div class="modal-header">
+            <h3>异常账单明细</h3>
+            <button class="btn-close" id="btnCloseReconDetails">×</button>
+          </div>
+          <div class="modal-body" style="max-height: 70vh; overflow-y: auto; padding: 1rem;">
+            <table class="cart-table">
+              <thead>
+                <tr>
+                  <th>订单ID</th>
+                  <th>时间</th>
+                  <th>应收</th>
+                  <th>实收</th>
+                  <th>已退款</th>
+                  <th>差异</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody id="reconDetailsTableBody">
+                <!-- JS 填充 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 审计日志页面 (管理员/店长) -->
+      <section id="auditSection">
+        <div class="view-header">
+          <h2>审计日志</h2>
+        </div>
+        <div class="history-filters" style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+          <select id="auditStoreFilter" class="date-filter-select" style="min-width: 150px;">
+            <option value="">全部门店</option>
+          </select>
+          <input type="text" id="auditUserFilter" placeholder="搜索操作人..." class="search-input" style="max-width: 150px;">
+          <select id="auditActionFilter" class="date-filter-select" style="min-width: 150px;">
+            <option value="">全部动作</option>
+            <option value="LOGIN">登录</option>
+            <option value="ORDER_CREATED">创建订单</option>
+            <option value="PAYMENT_SUCCESS">支付成功</option>
+            <option value="REFUND_REQUESTED">发起退款</option>
+            <option value="REFUND_APPROVED">退款通过</option>
+            <option value="REFUND_REJECTED">退款拒绝</option>
+            <option value="INVENTORY_ADJUST">库存调整</option>
+            <option value="STORE_PRICE_CHANGED">价格调整</option>
+          </select>
+          <input type="date" id="auditStartDate" class="date-select" style="width:auto;">
+          <input type="date" id="auditEndDate" class="date-select" style="width:auto;">
+          <button id="btnAuditFilter" class="btn btn-primary">过滤</button>
+        </div>
+        <div class="history-container">
+          <table class="cart-table" style="font-size: 0.9rem;">
+            <thead>
+              <tr>
+                <th style="width: 160px;">时间</th>
+                <th style="width: 100px;">操作人</th>
+                <th style="width: 120px;">门店</th>
+                <th style="width: 150px;">动作</th>
+                <th>详情</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody">
+              <!-- JS 填充 -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- 左侧导航栏 -->
+    <nav class="nav-sidebar">
+      <div class="nav-header">
+        <h1>如意收银</h1>
+        <div id="currentUserInfo" class="user-profile">
+          <span class="user-name" id="displayUserName">未登录</span>
+          <span class="user-role" id="displayUserRole">Role</span>
+          <button id="btnLogout" class="btn-logout" title="退出登录">退出</button>
+        </div>
+        <div id="syncStatus" class="sync-status offline">○ 离线模式</div>
+        <!-- 门店切换器 (管理员专用) -->
+        <div id="storeSelectorArea" class="store-selector-area" style="display:none; margin-top: 15px;">
+          <select id="storeSwitcher" class="store-select">
+            <!-- 动态加载门店列表 -->
+          </select>
+        </div>
+      </div>
+      <div class="nav-menu">
+        <div class="nav-item active" data-view="pos">收银台</div>
+        <div class="nav-item" data-view="cashierReport" id="navCashierReport" style="display:none;">今日营收</div>
+        <div class="nav-item" data-view="teamReport" id="navTeamReport" style="display:none;">团队报表</div>
+        <div class="nav-item" data-view="addProduct">添加商品</div>
+        <div class="nav-item" data-view="products">
+          商品管理
+          <span id="stockWarningBadge" class="badge badge-warning" style="display:none;">0</span>
+        </div>
+        <div class="nav-item" data-view="history">交易历史</div>
+        <div class="nav-item" data-view="refunds" id="navRefunds" style="display:none;">退款审批</div>
+        <div class="nav-item" data-view="report">数据报表</div>
+        <div class="nav-item" data-view="reconciliation" id="navReconciliation" style="display:none;">对账中心</div>
+        <div class="nav-item" data-view="audit" id="navAudit" style="display:none;">审计日志</div>
+        <div class="nav-item" data-view="settings">系统设置</div>
+      </div>
+    </nav>
+  </div>
+
+  <!-- 结账模态框 -->
+  <div id="settleModal" class="modal-backdrop">
+    <div class="modal-content">
+      <h2>确认结账</h2>
+      <div id="receiptPreview" class="receipt-preview"></div>
+      <!-- 结算核心：混合支付逻辑 -->
+      <div class="payment-mixed-container">
+        <div class="payment-summary-row">
+            <span>应收：<strong id="paymentAmount">¥ 0.00</strong></span>
+            <span style="color:var(--primary);">已收：<strong id="paidAmount">¥ 0.00</strong></span>
+            <span style="color:var(--text-muted);">待收：<strong id="remainingAmount">¥ 0.00</strong></span>
+        </div>
+
+        <div class="payment-records-area">
+          <label style="font-size: 0.8rem; color: var(--text-muted);">支付明细：</label>
+          <div id="paymentRecordList" class="payment-record-list">
+            <!-- 已添加的支付记录显示在这里 -->
+            <div class="empty-tip" style="padding: 10px; font-size: 0.85rem; color: #999; text-align: center;">尚未录入支付明细</div>
+          </div>
+        </div>
+
+        <div class="add-payment-form" style="border-top: 1px dashed var(--border); padding-top: 15px; margin-top: 10px;">
+          <div style="display: flex; gap: 10px; align-items: flex-end;">
+            <div class="form-group" style="flex: 1; margin-bottom: 0;">
+              <label>支付方式</label>
+              <select id="mixPaymentMethod" class="date-select" style="height: 38px;">
+                <option value="scan">📱 扫码支付</option>
+                <option value="cash">💵 现金支付</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 1; margin-bottom: 0;">
+              <label>金额 (¥)</label>
+              <input type="number" id="mixPaymentAmount" placeholder="输入金额" step="0.01" style="height: 38px; border: 1px solid var(--border); border-radius: 4px; padding: 0 10px; width: 100%;">
+            </div>
+            <button id="btnAddPaymentLine" class="btn btn-outline" style="height: 38px; padding: 0 15px; border-color: var(--primary); color: var(--primary);">添加</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions" style="margin-top: 25px;">
+        <button id="btnCancelSettle" class="btn btn-secondary">放弃整单</button>
+        <button id="btnConfirmSettle" class="btn btn-primary" disabled>确认并完成订单</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SKU 选择模态框 -->
+  <div id="skuModal" class="modal-backdrop">
+    <div class="modal-content">
+      <h2>选择规格</h2>
+      <div id="skuModalProductName" class="sku-modal-title">商品名称</div>
+      <div id="skuList" class="sku-selector-list">
+        <!-- SKU 列表通过 JS 生成 -->
+      </div>
+      <div class="modal-actions">
+        <button id="btnCancelSku" class="btn btn-secondary">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 提示 -->
+  <div id="toast" class="toast">✓ 结账成功！</div>
+  <div id="toastAddProduct" class="toast">✓ 商品已添加！</div>
+  <div id="toastStoreSwitch" class="toast">✓ 门店已切换！</div>
+
+  <!-- 员工管理模态框 (店长/管理员专用) -->
+  <div id="subordinateModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>添加新员工</h2>
+      </div>
+      <form id="subordinateForm" class="product-form">
+        <div class="form-group">
+          <label for="subName">员工姓名</label>
+          <input type="text" id="subName" placeholder="例如：张三" required>
+        </div>
+        <div class="form-group">
+          <label for="subUsername">登录账号</label>
+          <input type="text" id="subUsername" placeholder="建议使用拼音或英文" required>
+        </div>
+        <div class="form-group">
+          <label for="subPassword">登录密码</label>
+          <input type="password" id="subPassword" placeholder="设置初始密码" required>
+        </div>
+        <div class="form-group" id="subStoreGroup">
+          <label for="subStoreId">分配门店</label>
+          <select id="subStoreId" required>
+            <!-- 动态加载门店列表 -->
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="btnCancelSub" class="btn btn-secondary">取消</button>
+          <button type="submit" class="btn btn-primary">确认添加</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 修改密码模态框 (强制修改) -->
+  <div id="changePasswordModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div class="section-header">
+        <h2>请修改初始密码</h2>
+        <p style="color:var(--text-muted); font-size:0.9rem;">为了系统安全，首次登录必须修改密码</p>
+      </div>
+      <form id="changePasswordForm" class="product-form">
+        <div class="form-group">
+          <label for="oldPassword">当前密码</label>
+          <input type="password" id="oldPassword" required>
+        </div>
+        <div class="form-group">
+          <label for="newPassword">新密码</label>
+          <input type="password" id="newPassword" placeholder="建议使用更复杂的密码" required>
+        </div>
+        <div class="form-group">
+          <label for="confirmPassword">确认新密码</label>
+          <input type="password" id="confirmPassword" required>
+        </div>
+        <div id="pwdError" class="login-error-msg" style="margin-bottom:1rem;"></div>
+        <div class="modal-actions">
+          <button type="submit" class="btn btn-primary btn-block">确认修改并进入系统</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 库存调整模态框 (店长/管理员专用) -->
+  <div id="inventoryAdjustModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>库存调整</h2>
+      </div>
+      <form id="inventoryAdjustForm" class="product-form">
+        <div class="form-group" id="adjustStoreGroup">
+          <label for="adjustStoreId">调整门店</label>
+          <select id="adjustStoreId">
+            <!-- 动态加载 (管理员可选任意门店) -->
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="adjustProductSearch">商品搜索</label>
+          <input type="text" id="adjustProductSearch" placeholder="输入商品名称或条码搜索..." autocomplete="off">
+          <div id="adjustProductResults" style="border:1px solid var(--border);border-radius:4px;max-height:150px;overflow-y:auto;display:none;background:var(--surface);"></div>
+          <input type="hidden" id="adjustProductId">
+          <input type="hidden" id="adjustSkuId">
+          <div id="adjustSelectedProduct" style="margin-top:6px;font-size:0.9rem;color:var(--primary);"></div>
+        </div>
+        <div class="form-group">
+          <label for="adjustQty">调整数量（正数=增加，负数=减少）</label>
+          <input type="number" id="adjustQty" placeholder="例如 10 或 -5" required>
+        </div>
+        <div class="form-group">
+          <label for="adjustReason">原因</label>
+          <input type="text" id="adjustReason" placeholder="例如：盘点差异、损耗补充">
+        </div>
+        <div id="adjustError" class="login-error-msg" style="margin-bottom:0.5rem;"></div>
+        <div class="modal-actions">
+          <button type="button" id="btnCancelAdjust" class="btn btn-secondary">取消</button>
+          <button type="submit" class="btn btn-primary">确认调整</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>

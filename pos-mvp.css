@@ -1,0 +1,24 @@
+:root{--bg:#f7f8fa;--surface:#fff;--border:#e6e6e6;--text:#1a1a1a;--primary:#2563eb;--radius:10px;--toast:#38a169}
+*{box-sizing:border-box}
+body{font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;background:var(--bg);color:var(--text);margin:0}
+.pm-header{padding:12px 16px;background:#fff;border-bottom:1px solid var(--border)}
+.pm-title{font-weight:700;font-size:1.15rem}
+.pm-layout{display:grid;grid-template-columns:1fr 420px;gap:16px;padding:12px;max-width:1200px;margin:0 auto}
+.pm-products,.pm-cart{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px}
+.pm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;margin-top:8px}
+.pm-card{border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;background:#fff;cursor:pointer}
+.pm-card:hover{border-color:var(--primary);box-shadow:0 2px 6px rgba(0,0,0,.05)}
+.pm-grid .pm-card .pm-name{font-size:.9rem}
+.pm-grid .pm-card .pm-price{color:var(--primary);font-weight:600;margin-top:4px}
+.pm-btn{padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:#111;color:#fff;cursor:pointer}
+.pm-btn:hover{opacity:.95}
+.pm-btn-secondary{background:#f5f5f5;color:#333}
+.pm-cart-list{min-height:120px}
+.pm-cart-item{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px dashed var(--border)}
+.pm-cart-controls{display:flex;gap:6px}
+.pm-totals{margin-top:12px;line-height:1.6}
+.pm-total{font-weight:700}
+.pm-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.4)}
+.pm-modal-content{background:#fff;padding:16px 18px;border-radius:8px;min-width:320px}
+.pm-receipt-body{max-height:260px;overflow:auto;background:#f6f6f6;padding:10px;border-radius:6px;margin-bottom:8px}
+.pm-empty{color:var(--text-muted);text-align:center;padding:16px}

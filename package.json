@@ -1,0 +1,45 @@
+{
+  "name": "ruyi-pos",
+  "version": "1.0.0",
+  "description": "如意收银 - 专业的零售级 POS 收银系统",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "npm run server-dev",
+    "dev:daemon": "npm run server-dev:daemon",
+    "dev:stop": "npm run server-dev:stop",
+    "server-start": "npm start --prefix server",
+    "server-dev": "npm run dev --prefix server",
+    "server-dev:daemon": "npm run dev:daemon --prefix server",
+    "server-dev:stop": "npm run dev:stop --prefix server",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "keywords": [
+    "pos",
+    "cashier",
+    "retail"
+  ],
+  "author": "Ruyi POS Team",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^28.2.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.ruyipos.app",
+    "productName": "如意收银系统",
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}
