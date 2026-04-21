@@ -515,7 +515,10 @@ class SyncManager {
 // ==================== 业务逻辑 ====================
 
 function computeCartTotal(items, discounts = [], taxRate = TAX_RATE) {
-  const subtotalVal = items.reduce((sum, c) => sum + c.product.price * c.qty, 0);
+  const subtotalVal = items.reduce((sum, c) => {
+    const price = c.sku ? c.sku.price : c.product.price;
+    return sum + (parseFloat(price) || 0) * (c.qty || 0);
+  }, 0);
 
   let discountTotal = 0;
   if (discounts?.length) {
@@ -1871,13 +1874,14 @@ class POSApp {
 
       const itemCount = tx.items ? tx.items.reduce((sum, item) => sum + item.qty, 0) : 0;
 
-      return `
+        return `
             <div class="history-item" data-id="${tx.id}">
               <div class="history-header">
                 <div class="history-header-left">
-                  <span class="history-id">${tx.id}</span>
+                  <span class="history-id">${tx.order_no || tx.id}</span>
                   <span class="history-time">${dateStr} ${timeStr}</span>
                 </div>
+                <div class="history-header-right" style="display:flex; align-items:center;">
                   <span class="history-total">¥${formatPrice(tx.total || tx.amount)}</span>
                   ${ tx.status === 'refunded' ? '<span class="status-refund">已退款</span>' : tx.status === 'partially_refunded' ? '<span class="status-refund" style="background:#e67e22;">部分退款</span>' : tx.status === 'refund_requested' ? '<span style="color:var(--warning);font-size:12px;">退款申请中</span>' : '' }
                   <span class="history-count">${itemCount}件商品</span>
@@ -2215,6 +2219,11 @@ class POSApp {
 
   openSettleModal() {
     if (this.cart.length === 0) return;
+    
+    if (!this.currentStoreId) {
+      alert('【未选择门店】\n管理员账号需先在左侧菜单栏切换到具体门店，才能进行结账。');
+      return;
+    }
 
     const totals = computeCartTotal(this.cart, [], TAX_RATE);
     const total = totals.total;
@@ -2859,6 +2868,10 @@ class POSApp {
     document.getElementById('btnAddTemp')?.addEventListener('click', () => {
       this.switchView('addProduct');
     });
+
+    this.dom.btnSettle?.addEventListener('click', () => this.openSettleModal());
+    this.dom.btnConfirmSettle?.addEventListener('click', () => this.confirmSettle());
+    this.dom.btnCancelSettle?.addEventListener('click', () => this.closeSettleModal());
 
     this.dom.btnAddPaymentLine?.addEventListener('click', () => this.handleAddPaymentLine());
 

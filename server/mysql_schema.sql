@@ -82,7 +82,18 @@ CREATE TABLE IF NOT EXISTS skus (
     INDEX idx_store_product (store_id, product_id)
 );
 
--- 5. Transactions Table (Orders)
+-- 5. Devices Table (Phase 4 Foundation)
+CREATE TABLE IF NOT EXISTS devices (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(100),
+    store_id VARCHAR(50),
+    last_login_at BIGINT,
+    status ENUM('active', 'inactive') DEFAULT 'active',
+    created_at BIGINT,
+    FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE SET NULL
+);
+
+-- 6. Transactions Table (Orders)
 CREATE TABLE IF NOT EXISTS transactions (
     id VARCHAR(50) PRIMARY KEY,
     merchant_id VARCHAR(50) NOT NULL,
@@ -186,17 +197,6 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     time BIGINT,
     store_id VARCHAR(50),
     FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE,
-    FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE SET NULL
-);
-
--- 11. Devices Table (Phase 4 Foundation)
-CREATE TABLE IF NOT EXISTS devices (
-    id VARCHAR(50) PRIMARY KEY,
-    name VARCHAR(100),
-    store_id VARCHAR(50),
-    last_login_at BIGINT,
-    status ENUM('active', 'inactive') DEFAULT 'active',
-    created_at BIGINT,
     FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE SET NULL
 );
 
