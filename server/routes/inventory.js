@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const syncService = require('../sync_service');
 const { ApiResponse, asyncHandler } = require('../utils');
 const { authenticate } = require('../middleware/auth');
 const { requireRole, requireActiveUser } = require('../middleware/rbac');
@@ -65,10 +66,10 @@ router.post('/adjust', authenticate, requireActiveUser, requireRole(['merchant_a
         if (sku_id) {
             // 验证 SKU 是否存在于该商户（不再校验 products.store_id，因为库存由 inventory 表定义）
             const [skuRows] = await conn.execute(
-                `SELECT s.id, p.id AS product_id, p.name, s.specName 
-                 FROM skus s 
-                 JOIN products p ON s.product_id = p.id 
-                 WHERE s.id = ? AND p.merchant_id = ? FOR UPDATE`,
+                `SELECT s.id, p.id AS product_id, p.name, s.specName
+                 FROM skus s
+                 JOIN products p ON s.product_id = p.id
+                 WHERE s.id = ? AND p.merchant_id = ?`,
                 [sku_id, merchant_id]
             );
             
@@ -83,13 +84,13 @@ router.post('/adjust', authenticate, requireActiveUser, requireRole(['merchant_a
             await conn.execute(
                 `INSERT INTO inventory (id, merchant_id, store_id, product_id, sku_id, stock, updated_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?)
-                 ON DUPLICATE KEY UPDATE stock = stock + ?, updated_at = ?`,
+                 ON CONFLICT(id) DO UPDATE SET stock = stock + excluded.stock, updated_at = excluded.updated_at`,
                 [`inv_s_${sku_id}_${target_store_id}`, merchant_id, target_store_id, finalProductId, sku_id, qty, Date.now(), qty, Date.now()]
             );
             
         } else if (product_id) {
             const [productRows] = await conn.execute(
-                `SELECT id, name FROM products WHERE id = ? AND merchant_id = ? FOR UPDATE`,
+                `SELECT id, name FROM products WHERE id = ? AND merchant_id = ?`,
                 [product_id, merchant_id]
             );
             
@@ -103,7 +104,7 @@ router.post('/adjust', authenticate, requireActiveUser, requireRole(['merchant_a
             await conn.execute(
                 `INSERT INTO inventory (id, merchant_id, store_id, product_id, sku_id, stock, updated_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?)
-                 ON DUPLICATE KEY UPDATE stock = stock + ?, updated_at = ?`,
+                 ON CONFLICT(id) DO UPDATE SET stock = stock + excluded.stock, updated_at = excluded.updated_at`,
                 [`inv_p_${product_id}_${target_store_id}`, merchant_id, target_store_id, product_id, '', qty, Date.now(), qty, Date.now()]
             );
         }
@@ -124,6 +125,16 @@ router.post('/adjust', authenticate, requireActiveUser, requireRole(['merchant_a
 
         await conn.commit();
         conn.release();
+
+        // Enqueue inventory movement for sync
+        syncService.enqueue({
+            merchant_id,
+            store_id: target_store_id,
+            entity_type: 'inventory_movement',
+            entity_id: movement_id,
+            operation: 'create',
+            payload: { movement_id, product_id: finalProductId, sku_id, qty, type, store_id: target_store_id }
+        });
 
         ApiResponse.success(res, { movement_id, target_store_id, qty_adjusted: qty }, 'Inventory adjusted successfully');
     } catch (err) {

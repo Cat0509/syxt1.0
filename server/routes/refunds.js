@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const syncService = require('../sync_service');
 const { ApiResponse, asyncHandler } = require('../utils');
 const { authenticate } = require('../middleware/auth');
 const { requireRole, requireActiveUser } = require('../middleware/rbac');
@@ -59,7 +60,7 @@ router.post('/', authenticate, requireActiveUser, requireRole(['merchant_admin',
 
         // 验证订单是否存在且状态为 paid 或 partially_refunded
         const [orders] = await conn.execute(
-            'SELECT id, store_id, status FROM transactions WHERE id = ? AND merchant_id = ? FOR UPDATE',
+            'SELECT id, store_id, status FROM transactions WHERE id = ? AND merchant_id = ?',
             [order_id, merchant_id]
         );
 
@@ -125,6 +126,15 @@ router.post('/', authenticate, requireActiveUser, requireRole(['merchant_admin',
         await conn.commit();
         conn.release();
 
+        // Enqueue refund request for sync
+        syncService.enqueue({
+            merchant_id, store_id,
+            entity_type: 'refund',
+            entity_id: refund_id,
+            operation: 'create',
+            payload: { refund_id, order_id, amount, reason, items: refund_items }
+        });
+
         ApiResponse.success(res, { refund_id }, 'Refund requested successfully');
     } catch (err) {
         if (conn) {
@@ -148,7 +158,7 @@ router.patch('/:id/approve', authenticate, requireActiveUser, requireRole(['merc
 
         // 获取退款单和关联的订单
         const [refunds] = await conn.execute(
-            'SELECT r.id, r.order_id, r.status, t.store_id, t.total FROM refunds r JOIN transactions t ON r.order_id = t.id WHERE r.id = ? AND t.merchant_id = ? FOR UPDATE',
+            'SELECT r.id, r.order_id, r.status, t.store_id, t.total FROM refunds r JOIN transactions t ON r.order_id = t.id WHERE r.id = ? AND t.merchant_id = ?',
             [refund_id, merchant_id]
         );
 
@@ -241,6 +251,15 @@ router.patch('/:id/approve', authenticate, requireActiveUser, requireRole(['merc
         await conn.commit();
         conn.release();
 
+        // Enqueue refund approval for sync
+        syncService.enqueue({
+            merchant_id, store_id: refund.store_id,
+            entity_type: 'refund',
+            entity_id: refund_id,
+            operation: 'update',
+            payload: { refund_id, status: finalStatus, approved_amount: totalRefundAmount }
+        });
+
         ApiResponse.success(res, { status: finalStatus }, 'Refund approved and inventory replenished');
     } catch (err) {
         if (conn) {
@@ -263,7 +282,7 @@ router.patch('/:id/reject', authenticate, requireActiveUser, requireRole(['merch
          await conn.beginTransaction();
 
          const [refunds] = await conn.execute(
-             'SELECT r.id, r.order_id, r.status, t.store_id FROM refunds r JOIN transactions t ON r.order_id = t.id WHERE r.id = ? AND t.merchant_id = ? FOR UPDATE',
+             'SELECT r.id, r.order_id, r.status, t.store_id FROM refunds r JOIN transactions t ON r.order_id = t.id WHERE r.id = ? AND t.merchant_id = ?',
              [refund_id, merchant_id]
          );
 
@@ -280,7 +299,7 @@ router.patch('/:id/reject', authenticate, requireActiveUser, requireRole(['merch
 
          // 将退款单置为已拒绝
          await conn.execute(
-             'UPDATE refunds SET status = ?, reason = CONCAT(reason, ?), updated_at = ? WHERE id = ?',
+             'UPDATE refunds SET status = ?, reason = reason || ?, updated_at = ? WHERE id = ?',
              ['rejected', reason ? ` (拒退原因: ${reason})` : '', Date.now(), refund_id]
          );
 

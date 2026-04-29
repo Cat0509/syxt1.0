@@ -1,92 +1,220 @@
 const { app, BrowserWindow, Menu, ipcMain } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const fs = require('fs');
 
-let serverProcess = null;
+let backendServer = null;
+let backendModule = null;
+let wizardWindow = null;
+let mainWindow = null;
 
-function startBackend() {
-    if (serverProcess) return;
-
-    const serverDir = path.join(__dirname, 'server');
-    const isDev = process.env.NODE_ENV === 'development';
-
-    // 在开发环境下启动 nodemon，在生产环境下直接启动 node
-    const command = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    const args = isDev ? ['run', 'dev'] : ['start'];
-
-    serverProcess = spawn(command, args, {
-        cwd: serverDir,
-        shell: true
-    });
-
-    serverProcess.stdout.on('data', (data) => {
-        console.log(`Server: ${data}`);
-    });
-
-    serverProcess.stderr.on('data', (data) => {
-        console.error(`Server Error: ${data}`);
-    });
-
-    serverProcess.on('close', (code) => {
-        console.log(`Server process exited with code ${code}`);
-        serverProcess = null;
+// ---------------------------------------------------------------------------
+// Check if the system has been fully initialized via API
+// ---------------------------------------------------------------------------
+function checkInitStatus() {
+    return new Promise((resolve) => {
+        const http = require('http');
+        const req = http.get('http://localhost:3000/api/v1/auth/init-status', (res) => {
+            let data = '';
+            res.on('data', (chunk) => data += chunk);
+            res.on('end', () => {
+                try {
+                    const json = JSON.parse(data);
+                    resolve(json.data && json.data.initialized === true);
+                } catch (_) {
+                    // API error → treat as not initialized
+                    resolve(false);
+                }
+            });
+        });
+        req.on('error', () => resolve(false));
+        req.setTimeout(3000, () => { req.destroy(); resolve(false); });
     });
 }
 
-function createWindow() {
-    // 创建浏览器窗口
-    const mainWindow = new BrowserWindow({
+// ---------------------------------------------------------------------------
+// Backend server
+// ---------------------------------------------------------------------------
+function startBackend() {
+    if (backendServer) return;
+
+    const dataDir = path.join(app.getPath('userData'), 'RuyiPOS');
+    if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+    }
+
+    process.env.PORT = process.env.PORT || '3000';
+    process.env.DB_PATH = process.env.DB_PATH || path.join(dataDir, 'data.db');
+    process.env.BACKUP_DIR = process.env.BACKUP_DIR || path.join(dataDir, 'backups');
+
+    backendModule = require('./server/index');
+    backendServer = backendModule.startServer({ port: process.env.PORT });
+    backendServer.on('close', () => {
+        backendServer = null;
+    });
+}
+
+function stopBackend() {
+    if (!backendModule) return;
+
+    backendModule.stopServer(() => {
+        backendServer = null;
+    });
+}
+
+/**
+ * Wait for the backend to be ready by polling /health endpoint.
+ * Returns true if the server responded successfully.
+ */
+function waitForBackend(maxRetries = 30, intervalMs = 1000) {
+    return new Promise((resolve) => {
+        const http = require('http');
+        let retries = 0;
+
+        const check = () => {
+            retries++;
+            const req = http.get('http://localhost:3000/health', (res) => {
+                let data = '';
+                res.on('data', (chunk) => data += chunk);
+                res.on('end', () => {
+                    try {
+                        const json = JSON.parse(data);
+                        if (json.code === 200) {
+                            resolve(true);
+                            return;
+                        }
+                    } catch (_) {}
+                    retry();
+                });
+            });
+            req.on('error', () => retry());
+            req.setTimeout(2000, () => { req.destroy(); retry(); });
+        };
+
+        const retry = () => {
+            if (retries >= maxRetries) {
+                resolve(false);
+                return;
+            }
+            setTimeout(check, intervalMs);
+        };
+
+        check();
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Windows
+// ---------------------------------------------------------------------------
+function createSetupWizard() {
+    wizardWindow = new BrowserWindow({
+        width: 560,
+        height: 680,
+        minWidth: 480,
+        minHeight: 600,
+        resizable: true,
+        fullscreenable: false,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload-wizard.js')
+        },
+        title: '如意收银 - 初始化设置'
+    });
+
+    wizardWindow.loadFile('setup-wizard.html');
+
+    // Remove menu bar for cleaner wizard experience
+    wizardWindow.setMenuBarVisibility(false);
+
+    wizardWindow.on('closed', () => {
+        wizardWindow = null;
+    });
+
+    if (process.env.NODE_ENV === 'development') {
+        wizardWindow.webContents.openDevTools();
+    }
+}
+
+function createMainWindow() {
+    mainWindow = new BrowserWindow({
         width: 1280,
         height: 800,
         minWidth: 1024,
         minHeight: 768,
         webPreferences: {
-            nodeIntegration: false, // 安全起见，禁用Node集成
-            contextIsolation: true, // 启用上下文隔离
-            preload: path.join(__dirname, 'preload.js') // 如果需要预加载脚本
-        },
-        // icon: path.join(__dirname, 'icon.png') // 如果有图标的话
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js')
+        }
     });
 
-    // 加载 index.html
     mainWindow.loadFile('index.html');
 
-    // 默认不打开开发者工具，但可以通过菜单打开
-    // mainWindow.webContents.openDevTools();
-
-    // 可以在这里根据环境变量自动开启
     if (process.env.NODE_ENV === 'development') {
         mainWindow.webContents.openDevTools();
     }
 }
 
-// 监听启动后端请求
+// ---------------------------------------------------------------------------
+// IPC handlers
+// ---------------------------------------------------------------------------
 ipcMain.on('start-backend', () => {
     console.log('Starting backend via IPC...');
     startBackend();
 });
 
-// 当 Electron 完成初始化并准备创建浏览器窗口时调用此方法
-app.whenReady().then(() => {
-    // 默认情况下，我们可以选则在这里启动，或者等前端指令
-    // startBackend(); 
-    createWindow();
+// Setup wizard signals completion
+ipcMain.on('setup-complete', () => {
+    console.log('Setup complete, opening main window...');
+    if (wizardWindow) {
+        wizardWindow.close();
+        wizardWindow = null;
+    }
+    createMainWindow();
+});
+
+// ---------------------------------------------------------------------------
+// App lifecycle
+// ---------------------------------------------------------------------------
+app.whenReady().then(async () => {
+    // Always start the backend first
+    startBackend();
+
+    // Wait for backend to be ready
+    const backendReady = await waitForBackend();
+    if (!backendReady) {
+        console.error('Backend failed to start within timeout.');
+        // Still try to open the main window – the user will see an error
+        createMainWindow();
+        return;
+    }
+
+    // Check if system is fully initialized via API (not just file existence)
+    const initialized = await checkInitStatus();
+    if (!initialized) {
+        // First-time launch: show setup wizard
+        createSetupWizard();
+    } else {
+        // Already initialized: go straight to main window
+        createMainWindow();
+    }
 
     app.on('activate', function () {
-        // macOS 中，点击 dock 图标且没有其他窗口打开时，通常会重新创建一个窗口
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+        if (BrowserWindow.getAllWindows().length === 0) {
+            // Re-check on activate (macOS)
+            checkInitStatus().then(init => {
+                if (init) createMainWindow();
+                else createSetupWizard();
+            });
+        }
     });
 });
 
-// 除了 macOS 外，当所有窗口都被关闭的时候退出程序。
 app.on('window-all-closed', function () {
-    if (serverProcess) {
-        // 尝试关闭服务器
-        if (process.platform === 'win32') {
-            spawn("taskkill", ["/pid", serverProcess.pid, '/f', '/t']);
-        } else {
-            serverProcess.kill();
-        }
-    }
+    stopBackend();
     if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', () => {
+    stopBackend();
 });

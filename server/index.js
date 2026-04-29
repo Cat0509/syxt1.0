@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const { ApiResponse } = require('./utils');
 const logger = require('./logger');
+const db = require('./db');
+const { startOrderTimeoutChecker } = require('./order_timeout');
 
 const productRoutes = require('./routes/products');
 const transactionRoutes = require('./routes/transactions');
@@ -16,11 +18,14 @@ const refundRoutes = require('./routes/refunds');
 const reportRoutes = require('./routes/reports');
 const paymentRoutes = require('./routes/payments');
 const syncRoutes = require('./routes/sync');
+const backupRoutes = require('./routes/backup');
+const backupService = require('./backup_service');
+const syncService = require('./sync_service');
 
 const app = express();
 const DEFAULT_PORT = 3000;
-const parsedPort = Number.parseInt(process.env.PORT || '', 10);
-const PORT = Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : DEFAULT_PORT;
+let serverInstance = null;
+let servicesStarted = false;
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -43,6 +48,7 @@ app.use('/api/v1/audit', auditRoutes);
 app.use('/api/v1/stores', storeRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/sync', syncRoutes);
+app.use('/api/v1/backup', backupRoutes);
 
 app.get('/health', (req, res) => {
     ApiResponse.success(res, { status: 'OK' }, 'Server is healthy');
@@ -57,18 +63,91 @@ app.use((err, req, res, next) => {
     ApiResponse.error(res, err.message || 'Internal Server Error');
 });
 
-const server = app.listen(PORT, () => {
-    console.log(`POS Sync Server v1 running at http://localhost:${PORT}`);
-});
+function resolvePort(port) {
+    const parsedPort = Number.parseInt(port || process.env.PORT || '', 10);
+    return Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : DEFAULT_PORT;
+}
 
-server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-        console.error(
-            `Port ${PORT} is already in use. Stop the existing process or set PORT in server/.env to a different value.`
-        );
-        process.exit(1);
+function startBackgroundServices() {
+    if (servicesStarted) return;
+
+    // Start order timeout checker
+    startOrderTimeoutChecker();
+
+    // Start auto backup
+    backupService.startAutoBackup();
+
+    // Start sync loop automatically (local mode if no HQ URL configured)
+    const hqUrl = process.env.HQ_SYNC_URL || null;
+    // Defer reading merchant/store IDs until after first init-setup.
+    // The sync loop can be fully configured later through /sync/loop/start.
+    syncService.startSyncLoop({ hqUrl, merchantId: null, storeId: null });
+
+    servicesStarted = true;
+}
+
+function stopBackgroundServices() {
+    const { stopOrderTimeoutChecker } = require('./order_timeout');
+    backupService.stopAutoBackup();
+    stopOrderTimeoutChecker();
+    syncService.stopSyncLoop();
+    servicesStarted = false;
+}
+
+function startServer(options = {}) {
+    if (serverInstance) return serverInstance;
+
+    const port = resolvePort(options.port);
+    process.env.PORT = String(port);
+
+    // Initialize SQLite database before starting server.
+    db.init();
+    startBackgroundServices();
+
+    serverInstance = app.listen(port, () => {
+        console.log(`POS Sync Server v1 running at http://localhost:${port}`);
+    });
+
+    serverInstance.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.error(
+                `Port ${port} is already in use. Stop the existing process or set PORT in server/.env to a different value.`
+            );
+        } else {
+            console.error('Failed to start server:', err);
+        }
+
+        if (require.main === module) {
+            process.exit(1);
+        }
+    });
+
+    serverInstance.on('close', () => {
+        serverInstance = null;
+    });
+
+    return serverInstance;
+}
+
+function stopServer(callback) {
+    stopBackgroundServices();
+
+    if (!serverInstance) {
+        if (callback) callback();
+        return;
     }
 
-    console.error('Failed to start server:', err);
-    process.exit(1);
-});
+    const closingServer = serverInstance;
+    serverInstance = null;
+    closingServer.close(callback);
+}
+
+if (require.main === module) {
+    startServer();
+}
+
+module.exports = {
+    app,
+    startServer,
+    stopServer
+};

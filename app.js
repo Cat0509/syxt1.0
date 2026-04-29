@@ -267,6 +267,19 @@ class SyncManager {
       const resp = await fetch(url, { ...options, headers });
 
       if (resp.status === 401) {
+        // Try token refresh before giving up
+        const refreshed = await this.tryRefreshToken();
+        if (refreshed) {
+          // Retry the original request with new token
+          const newHeaders = { ...this.authHeaders, ...options.headers };
+          const retryResp = await fetch(url, { ...options, headers: newHeaders });
+          if (retryResp.status === 401) {
+            if (this.onSessionExpired) this.onSessionExpired();
+            return { code: 401, message: '登录已失效，请重新登录' };
+          }
+          return await retryResp.json();
+        }
+
         console.warn('Unauthorized: Session expired.');
         if (this.onSessionExpired) this.onSessionExpired();
         return { code: 401, message: '登录已失效，请重新登录' };
@@ -277,6 +290,43 @@ class SyncManager {
       console.warn(`Request to ${path} failed:`, err);
       return { code: 500, message: '网络异常，请稍后重试' };
     }
+  }
+
+  static async tryRefreshToken() {
+    const user = safeJsonParse(localStorage.getItem('pos_user'), null);
+    if (!user || !user.token) return false;
+
+    // Decode JWT to check expiry (JWT payload is base64url encoded)
+    try {
+      const payload = JSON.parse(atob(user.token.split('.')[1]));
+      const expiresAt = (payload.exp || 0) * 1000; // Convert to ms
+      const now = Date.now();
+
+      // Only refresh if token is expired or about to expire within 1 day
+      if (expiresAt > now + 86400000) return true; // Still valid for > 1 day
+      if (expiresAt < now - 86400000 * 7) return false; // Expired too long ago, don't refresh
+    } catch {
+      return false;
+    }
+
+    try {
+      const resp = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` }
+      });
+      if (resp.ok) {
+        const result = await resp.json();
+        if (result.code === 200 && result.data && result.data.token) {
+          user.token = result.data.token;
+          localStorage.setItem('pos_user', JSON.stringify(user));
+          console.log('Token refreshed successfully');
+          return true;
+        }
+      }
+    } catch {
+      // Refresh failed silently
+    }
+    return false;
   }
 
   static async syncProducts(products) {
@@ -636,6 +686,10 @@ class POSApp {
     this.editingProductId = null;
     this.currentUser = safeJsonParse(localStorage.getItem('pos_user'), null);
 
+    // Barcode scanner state
+    this._barcodeBuffer = '';
+    this._lastBarcodeKeyTime = 0;
+
     // 分页状态
     this.historyPage = 1;
     this.historyPageSize = 20;
@@ -764,6 +818,12 @@ class POSApp {
   async checkAuth() {
     if (!this.currentUser || !this.currentUser.token) {
       document.getElementById('loginOverlay').classList.add('show');
+      // Auto-fill merchant ID from localStorage (set by setup wizard)
+      const savedMerchantId = localStorage.getItem('pos_merchant_id');
+      const merchantEl = document.getElementById('merchantId');
+      if (savedMerchantId && merchantEl && !merchantEl.value) {
+        merchantEl.value = savedMerchantId;
+      }
       return;
     }
 
@@ -929,6 +989,10 @@ class POSApp {
     });
 
     if (result.code === 200) {
+      // Save merchant ID for auto-fill on login page
+      if (result.data && result.data.merchantId) {
+        localStorage.setItem('pos_merchant_id', result.data.merchantId);
+      }
       alert('系统初始化完成！请使用设置的管理员账号登录。');
       this.dom.initOverlay.style.display = 'none';
       this.checkInitializationStatus(); // Check status again to show login
@@ -1070,12 +1134,30 @@ class POSApp {
           <option value="${s.id}">${escapeHtml(s.name)}</option>
         `).join('');
       }
+
+      // 管理员登录后，若未选中门店且有可用门店，自动选中第一家
+      if (!this.currentStoreId && stores.length > 0) {
+        await this.switchStore(stores[0].id);
+      }
     }
   }
 
   async switchStore(storeId) {
     console.log('Switching to store:', storeId || 'Global');
     this.currentStoreId = storeId || null;
+
+    // 更新当前门店名称显示
+    const storeDisplay = document.getElementById('currentStoreDisplay');
+    const storeNameEl = document.getElementById('currentStoreName');
+    if (storeDisplay && storeNameEl) {
+      const store = this.stores.find(s => s.id === storeId);
+      if (store) {
+        storeNameEl.textContent = store.name;
+        storeDisplay.style.display = 'block';
+      } else {
+        storeDisplay.style.display = 'none';
+      }
+    }
 
     // 清空本地缓存并重新拉取
     // 注意：为了简单起见，这里直接调用 initialCloudPull
@@ -1387,15 +1469,47 @@ class POSApp {
       return;
     }
 
-    tbody.innerHTML = data.map(log => `
-      <tr>
+    // 异常检测规则
+    const isAnomalous = (log) => {
+      const act = log.action || '';
+      const details = log.details || '';
+      // 大额退款（>= 500）
+      if ((act.includes('REFUND') || act.includes('refund')) && /"amount"\s*:\s*\d{3,}/.test(details)) return { level: 'danger', reason: '大额退款' };
+      // 登录失败
+      if (act === 'LOGIN_FAILED') return { level: 'warning', reason: '登录失败' };
+      // 订单超时取消
+      if (act === 'ORDER_TIMEOUT_CANCEL') return { level: 'warning', reason: '订单超时' };
+      // 非营业时间操作（0:00-6:00）
+      const hour = new Date(log.time).getHours();
+      if (hour >= 0 && hour < 6 && !act.includes('TIMEOUT') && !act.includes('LOGIN')) {
+        return { level: 'warning', reason: '非营业时间操作' };
+      }
+      // 频繁取消（同一用户同一天取消>=3次 - 需要上下文，这里简化处理）
+      if (act === 'ORDER_CANCEL') return { level: 'info', reason: '订单取消' };
+      return null;
+    };
+
+    const badgeStyles = {
+      danger: 'background:#fff0f0; color:#ee0a24; border:1px solid #ffcdd2;',
+      warning: 'background:#fff8e1; color:#ff9800; border:1px solid #ffe0b2;',
+      info: 'background:#e3f2fd; color:#1976d2; border:1px solid #bbdefb;'
+    };
+
+    tbody.innerHTML = data.map(log => {
+      const anomaly = isAnomalous(log);
+      const rowStyle = anomaly ? `background:${anomaly.level === 'danger' ? '#fff5f5' : anomaly.level === 'warning' ? '#fffdf5' : '#f5f9ff'};` : '';
+      const badgeStyle = anomaly ? badgeStyles[anomaly.level] : 'background:#eee; color:#333;';
+      const anomalyTag = anomaly ? ` <span style="font-size:0.7rem; padding:1px 4px; border-radius:3px; ${badgeStyle}">${anomaly.reason}</span>` : '';
+
+      return `
+      <tr style="${rowStyle}">
         <td style="color:#666;">${new Date(log.time).toLocaleString()}</td>
         <td>${escapeHtml(log.username || '系统')}</td>
         <td>${escapeHtml(log.store_name || '-')}</td>
-        <td><span class="badge" style="background:#eee; color:#333;">${escapeHtml(log.action)}</span></td>
+        <td><span class="badge" style="${badgeStyle}">${escapeHtml(log.action)}</span>${anomalyTag}</td>
         <td style="font-family:monospace; font-size:0.8rem;">${escapeHtml(log.details)}</td>
-      </tr>
-    `).join('');
+      </tr>`;
+    }).join('');
   }
 
   async renderReport() {
@@ -2338,6 +2452,7 @@ class POSApp {
     const btn = this.dom.btnConfirmSettle;
     if (btn) { btn.disabled = true; btn.textContent = '创建订单...'; }
 
+    let orderId = null;
     try {
       const client_tx_id = (this.currentUser?.id || 'guest') + '_' + Date.now() + '_' + Math.floor(Math.random() * 9999);
       const orderPayload = {
@@ -2357,7 +2472,7 @@ class POSApp {
 
       const result = await SyncManager.createOrder(orderPayload);
       if (result && result.code === 200) {
-        const orderId = result.data.order_id;
+        orderId = result.data.order_id;
         btn.textContent = '正在处理支付...';
 
         // 顺序处理多笔支付
@@ -2387,6 +2502,15 @@ class POSApp {
       }
     } catch (err) {
       console.error('confirmSettle error:', err);
+      // 支付失败，尝试取消订单以恢复库存
+      if (orderId) {
+        try {
+          await SyncManager.request(`/orders/${orderId}/cancel`, { method: 'POST' });
+          console.log('Order cancelled, inventory restored:', orderId);
+        } catch (rollbackErr) {
+          console.error('Failed to rollback order:', rollbackErr);
+        }
+      }
       alert('操作失败：' + err.message);
     } finally {
       if (btn) { 
@@ -2672,6 +2796,7 @@ class POSApp {
     if (viewName === 'products') this.renderProductsPage();
     else if (viewName === 'history') this.renderHistory();
     else if (viewName === 'refunds') this.renderRefunds();
+    else if (viewName === 'settings') this.loadReceiptConfig();
     else if (viewName === 'cashierReport') this.renderCashierReport();
     else if (viewName === 'teamReport') this.renderTeamReport();
     else if (viewName === 'report') {
@@ -2730,6 +2855,26 @@ class POSApp {
   bindEvents() {
     document.getElementById('btnExportBackup')?.addEventListener('click', () => this.exportBackupJSON());
     document.getElementById('btnExportCSV')?.addEventListener('click', () => this.exportTransactionsCSV());
+
+    // 小票配置
+    document.getElementById('btnSaveReceiptConfig')?.addEventListener('click', () => this.saveReceiptConfig());
+    document.getElementById('btnPreviewReceipt')?.addEventListener('click', () => {
+      // Preview with a sample transaction
+      this.printReceipt({
+        id: 'SAMPLE-001',
+        order_no: 'SAMPLE-001',
+        time: Date.now(),
+        total: 18.50,
+        amount: 18.50,
+        items: [
+          { name: '可乐 330ml', price: 3.50, qty: 2 },
+          { name: '面包', price: 6.00, qty: 1 },
+          { name: '矿泉水', price: 2.50, qty: 2 }
+        ],
+        payments: [{ method: '现金', amount: 18.50 }],
+        cashier_id: '管理员'
+      });
+    });
 
     // 门店切换事件
     document.getElementById('storeSwitcher')?.addEventListener('change', (e) => {
@@ -2891,6 +3036,55 @@ class POSApp {
         }
       }
 
+      // ---- Barcode scanner support ----
+      // Scanners send characters rapidly (< 30ms between keystrokes) followed by Enter.
+      // We buffer rapid keystrokes and treat them as a barcode when Enter arrives.
+      const now = Date.now();
+      const activeTag = document.activeElement?.tagName;
+      const isInputFocused = activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT';
+
+      if (!isInputFocused && this.dom.posSection?.classList.contains('active')) {
+        if (now - this._lastBarcodeKeyTime < 50) {
+          // Rapid keystroke → part of a barcode scan
+          if (e.key.length === 1) { // Printable character only
+            this._barcodeBuffer += e.key;
+          }
+        } else if (e.key.length === 1) {
+          // First character of a potential barcode
+          this._barcodeBuffer = e.key;
+        }
+        this._lastBarcodeKeyTime = now;
+
+        if (e.key === 'Enter' && this._barcodeBuffer.length >= 4) {
+          e.preventDefault();
+          e.stopPropagation();
+          const barcode = this._barcodeBuffer.trim();
+          this._barcodeBuffer = '';
+
+          // Search product by barcode
+          const product = this.products.find(p => p.barcode === barcode);
+          if (product) {
+            this.addToCart(product);
+            showToast('toastSuccess');
+          } else {
+            // Also check SKUs
+            let found = false;
+            for (const p of this.products) {
+              const sku = (p.skus || []).find(s => s.barcode === barcode);
+              if (sku) {
+                this.addSkuToCart(p, sku);
+                found = true;
+                break;
+              }
+            }
+            if (!found) {
+              showToast('toastError');
+            }
+          }
+          return; // Don't process Enter for settle modal
+        }
+      }
+
       if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && this.dom.posSection?.classList.contains('active')) {
         if (this.dom.settleModal?.classList.contains('show')) {
           this.confirmSettle();
@@ -2998,30 +3192,137 @@ class POSApp {
   }
 
   printReceipt(tx) {
+    const config = this.getReceiptConfig();
     const dateStr = new Date(tx.time).toLocaleString('zh-CN');
     const itemsHtml = (tx.items || []).map(item =>
-      `<tr><td>${item.name}</td><td>x${item.qty}</td><td>¥${(item.price * item.qty).toFixed(2)}</td></tr>`
+      `<tr><td style="text-align:left;">${item.name}</td><td style="text-align:center;">x${item.qty}</td><td style="text-align:right;">¥${(item.price * item.qty).toFixed(2)}</td></tr>`
     ).join('');
-    const printWin = window.open('', '_blank', 'width=400,height=600');
-    printWin.document.write(`<!DOCTYPE html><html><head><title>小票</title>
-    <style>
-      body{font-family:monospace;padding:20px;font-size:13px;}
-      h2{text-align:center;margin-bottom:4px;}
-      p{text-align:center;margin:2px 0;color:#555;}
-      table{width:100%;border-collapse:collapse;margin-top:12px;}
-      td{padding:4px 2px;border-bottom:1px dashed #ccc;}
-      .total{font-size:15px;font-weight:bold;text-align:right;margin-top:10px;}
-      .footer{text-align:center;margin-top:16px;color:#888;font-size:11px;}
-    </style></head><body>
-    <h2>如意收银</h2>
-    <p>${dateStr}</p>
-    <p>订单号: ${tx.id}</p>
-    <table>${itemsHtml}</table>
-    <div class="total">合计：¥${parseFloat(tx.total || tx.amount).toFixed(2)}</div>
-    <div class="footer">感谢惠顾，欢迎再次光临！</div>
-    </body></html>`);
-    printWin.document.close();
-    setTimeout(() => { printWin.print(); }, 300);
+
+    const paymentsHtml = (tx.payments || []).map(p =>
+      `<div style="display:flex;justify-content:space-between;"><span>${p.method || '现金'}</span><span>¥${Number(p.amount).toFixed(2)}</span></div>`
+    ).join('');
+
+    const storeName = config.storeName || '如意收银';
+    const storePhone = config.storePhone || '';
+    const storeAddr = config.storeAddr || '';
+    const footer = config.footer || '感谢惠顾，欢迎再次光临！';
+
+    const receiptHtml = `
+      <div id="receiptContent" style="font-family:'Noto Sans SC',monospace;max-width:320px;margin:0 auto;padding:10px;font-size:13px;">
+        <div style="text-align:center;margin-bottom:8px;">
+          <h2 style="margin:0;font-size:18px;">${storeName}</h2>
+          ${storePhone ? `<p style="margin:2px 0;color:#555;">tel: ${storePhone}</p>` : ''}
+          ${storeAddr ? `<p style="margin:2px 0;color:#555;">${storeAddr}</p>` : ''}
+        </div>
+        <div style="border-top:1px dashed #333;border-bottom:1px dashed #333;padding:6px 0;margin:6px 0;">
+          <div style="display:flex;justify-content:space-between;"><span>订单号:</span><span>${(tx.order_no || tx.id || '').substring(0, 16)}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span>时间:</span><span>${dateStr}</span></div>
+          ${(tx.cashier_id || tx.processed_by) ? `<div style="display:flex;justify-content:space-between;"><span>收银员:</span><span>${tx.cashier_id || tx.processed_by || ''}</span></div>` : ''}
+        </div>
+        <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+          <thead><tr style="border-bottom:1px solid #333;">
+            <th style="text-align:left;padding:4px 0;font-size:12px;">商品</th>
+            <th style="text-align:center;padding:4px 0;font-size:12px;">数量</th>
+            <th style="text-align:right;padding:4px 0;font-size:12px;">金额</th>
+          </tr></thead>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+        <div style="border-top:1px dashed #333;margin-top:8px;padding-top:8px;">
+          ${paymentsHtml}
+          <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:bold;margin-top:6px;border-top:1px solid #333;padding-top:6px;">
+            <span>合计</span><span>¥${parseFloat(tx.total || tx.amount).toFixed(2)}</span>
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:16px;color:#888;font-size:11px;">
+          <p style="margin:2px 0;">${footer}</p>
+        </div>
+      </div>
+    `;
+
+    // Show preview in a modal first
+    const modal = document.createElement('div');
+    modal.className = 'modal-backdrop';
+    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;';
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:12px;padding:20px;max-width:400px;width:95%;max-height:90vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h3 style="margin:0;">小票预览</h3>
+          <button id="btnCloseReceiptPreview" style="background:none;border:none;font-size:20px;cursor:pointer;color:#999;">&times;</button>
+        </div>
+        <div style="border:1px dashed #ddd;padding:12px;background:#fafafa;border-radius:4px;">
+          ${receiptHtml}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <button id="btnDoPrint" style="flex:1;padding:10px;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;">🖨️ 打印</button>
+          <button id="btnCancelPrint" style="flex:1;padding:10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:14px;">取消</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('#btnCloseReceiptPreview').onclick = () => modal.remove();
+    modal.querySelector('#btnCancelPrint').onclick = () => modal.remove();
+    modal.querySelector('#btnDoPrint').onclick = () => {
+      // Open print window with @media print optimized styles
+      const printWin = window.open('', '_blank', 'width=400,height=600');
+      printWin.document.write(`<!DOCTYPE html><html><head><title>小票 - ${storeName}</title>
+      <style>
+        @page { size: 80mm auto; margin: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Noto Sans SC', monospace; padding: 5mm; font-size: 13px; color: #000; }
+        @media print {
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+        #receiptContent { max-width: 72mm; margin: 0 auto; }
+        #receiptContent h2 { text-align: center; font-size: 16px; margin-bottom: 4px; }
+        #receiptContent p { text-align: center; margin: 2px 0; color: #555; font-size: 11px; }
+        #receiptContent table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        #receiptContent td, #receiptContent th { padding: 3px 0; font-size: 12px; }
+        #receiptContent thead tr { border-bottom: 1px solid #000; }
+        #receiptContent tbody tr { border-bottom: 1px dashed #ccc; }
+        #receiptContent .total { font-size: 15px; font-weight: bold; text-align: right; margin-top: 8px; }
+        #receiptContent .footer { text-align: center; margin-top: 12px; color: #888; font-size: 10px; }
+      </style></head><body>${receiptHtml}</body></html>`);
+      printWin.document.close();
+      setTimeout(() => { printWin.print(); }, 300);
+      modal.remove();
+    };
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
+    });
+  }
+
+  getReceiptConfig() {
+    try {
+      return JSON.parse(localStorage.getItem('pos_receipt_config') || '{}');
+    } catch {
+      return {};
+    }
+  }
+
+  saveReceiptConfig() {
+    const config = {
+      storeName: document.getElementById('receiptStoreName')?.value.trim() || '',
+      storePhone: document.getElementById('receiptStorePhone')?.value.trim() || '',
+      storeAddr: document.getElementById('receiptStoreAddr')?.value.trim() || '',
+      footer: document.getElementById('receiptFooter')?.value.trim() || ''
+    };
+    localStorage.setItem('pos_receipt_config', JSON.stringify(config));
+    showToast('toastSuccess');
+  }
+
+  loadReceiptConfig() {
+    const config = this.getReceiptConfig();
+    const nameEl = document.getElementById('receiptStoreName');
+    const phoneEl = document.getElementById('receiptStorePhone');
+    const addrEl = document.getElementById('receiptStoreAddr');
+    const footerEl = document.getElementById('receiptFooter');
+    if (nameEl) nameEl.value = config.storeName || '';
+    if (phoneEl) phoneEl.value = config.storePhone || '';
+    if (addrEl) addrEl.value = config.storeAddr || '';
+    if (footerEl) footerEl.value = config.footer || '';
   }
 
   async refundTransaction(txId) {

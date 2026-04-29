@@ -34,11 +34,11 @@ router.get('/summary', authenticate, requireActiveUser, requireRole(['merchant_a
         // 1. 获取汇总数据 (销售总额、订单数、退款总额)
         // status 为 paid, refund_requested, partially_refunded 都算作有效订单
         const [summaryResults] = await db.query(`
-            SELECT 
-                COUNT(IF(status IN ('paid', 'refund_requested', 'partially_refunded'), 1, NULL)) as order_count,
-                SUM(IF(status IN ('paid', 'refund_requested', 'partially_refunded'), amount, 0)) as total_sales,
-                SUM(IF(status = 'refunded', amount, 0)) as refund_amount
-            FROM transactions 
+            SELECT
+                COUNT(CASE WHEN status IN ('paid', 'refund_requested', 'partially_refunded') THEN 1 END) as order_count,
+                SUM(CASE WHEN status IN ('paid', 'refund_requested', 'partially_refunded') THEN amount ELSE 0 END) as total_sales,
+                SUM(CASE WHEN status = 'refunded' THEN amount ELSE 0 END) as refund_amount
+            FROM transactions
             WHERE ${whereClause}
         `, queryParams);
 
@@ -79,7 +79,7 @@ router.get('/sales', authenticate, requireActiveUser, requireRole(['merchant_adm
     const target_store_id = req.effectiveStoreId;
     const { start_time, end_time } = req.query;
 
-    let whereClause = 'merchant_id = ? AND status IN ("paid", "refund_requested", "partially_refunded")';
+    let whereClause = "merchant_id = ? AND status IN ('paid', 'refund_requested', 'partially_refunded')";
     let params = [merchant_id];
 
     if (start_time) {
@@ -95,10 +95,10 @@ router.get('/sales', authenticate, requireActiveUser, requireRole(['merchant_adm
         params.push(target_store_id);
     }
 
-    // 按天进行汇总 (MySQL DATE_FORMAT 处理 13 位时间戳)
+    // 按天进行汇总 (SQLite date() handles 13-bit millisecond timestamps)
     const sql = `
-        SELECT 
-            DATE(FROM_UNIXTIME(time / 1000)) as date,
+        SELECT
+            date(time / 1000, 'unixepoch', 'localtime') as date,
             COUNT(1) as order_count,
             SUM(amount) as total_sales
         FROM transactions
@@ -117,7 +117,7 @@ router.get('/products', authenticate, requireActiveUser, requireRole(['merchant_
     const target_store_id = req.effectiveStoreId;
     const { start_time, end_time, limit = 10 } = req.query;
 
-    let whereClause = 't.merchant_id = ? AND t.status IN ("paid", "refund_requested", "partially_refunded")';
+    let whereClause = "t.merchant_id = ? AND t.status IN ('paid', 'refund_requested', 'partially_refunded')";
     let params = [merchant_id];
 
     if (start_time) {
@@ -159,7 +159,7 @@ router.get('/staff', authenticate, requireActiveUser, requireRole(['merchant_adm
     const target_store_id = req.effectiveStoreId;
     const { start_time, end_time } = req.query;
 
-    let whereClause = 't.merchant_id = ? AND t.status IN ("paid", "refund_requested", "partially_refunded")';
+    let whereClause = "t.merchant_id = ? AND t.status IN ('paid', 'refund_requested', 'partially_refunded')";
     let params = [merchant_id];
 
     if (start_time) {
@@ -198,7 +198,7 @@ router.get('/hourly', authenticate, requireActiveUser, requireRole(['merchant_ad
     const target_store_id = req.effectiveStoreId;
     const { start_time, end_time } = req.query;
 
-    let whereClause = 'merchant_id = ? AND status IN ("paid", "refund_requested", "partially_refunded")';
+    let whereClause = "merchant_id = ? AND status IN ('paid', 'refund_requested', 'partially_refunded')";
     let params = [merchant_id];
 
     if (start_time) {
@@ -222,8 +222,8 @@ router.get('/hourly', authenticate, requireActiveUser, requireRole(['merchant_ad
     }
 
     const sql = `
-        SELECT 
-            HOUR(FROM_UNIXTIME(time / 1000)) as hour,
+        SELECT
+            CAST(strftime('%H', time / 1000, 'unixepoch', 'localtime') AS INTEGER) as hour,
             COUNT(1) as count,
             SUM(amount) as amount
         FROM transactions
@@ -372,6 +372,116 @@ router.get('/reconciliation/orders', authenticate, requireActiveUser, requireRol
 
     const [rows] = await db.query(sqlDetails, params);
     ApiResponse.success(res, rows);
+}));
+
+// 日结单 PDF 导出
+router.get('/daily-settlement', authenticate, requireActiveUser, requireRole(['merchant_admin', 'store_manager']), requireStoreScope, asyncHandler(async (req, res) => {
+    const merchant_id = req.user.merchant_id;
+    const store_id = req.effectiveStoreId;
+    const date = req.query.date || new Date().toISOString().split('T')[0];
+
+    const dayStart = new Date(date + ' 00:00:00').getTime();
+    const dayEnd = new Date(date + ' 23:59:59').getTime();
+
+    const sqliteDb = db.getDb();
+
+    // 1. Summary
+    const summary = sqliteDb.prepare(`
+        SELECT
+            COUNT(*) as order_count,
+            COALESCE(SUM(CAST(t.total AS REAL)), 0) as total_sales,
+            COALESCE(SUM(CASE WHEN t.status = 'cancelled' THEN CAST(t.total AS REAL) ELSE 0 END), 0) as cancelled_amount,
+            COALESCE(SUM(CASE WHEN t.status IN ('refund_requested', 'refunded', 'partially_refunded') THEN CAST(t.total AS REAL) ELSE 0 END), 0) as refund_amount
+        FROM transactions t
+        WHERE t.merchant_id = ? AND t.store_id = ? AND t.time >= ? AND t.time <= ? AND t.status IN ('paid', 'cancelled', 'refund_requested', 'partially_refunded', 'refunded')
+    `).get(merchant_id, store_id, dayStart, dayEnd);
+
+    // 2. By payment method
+    const byMethod = sqliteDb.prepare(`
+        SELECT payment_method, COUNT(*) as count, SUM(CAST(total AS REAL)) as amount
+        FROM transactions
+        WHERE merchant_id = ? AND store_id = ? AND time >= ? AND time <= ? AND status = 'paid'
+        GROUP BY payment_method
+    `).all(merchant_id, store_id, dayStart, dayEnd);
+
+    // 3. By cashier
+    const byCashier = sqliteDb.prepare(`
+        SELECT cashier_id, COUNT(*) as count, SUM(CAST(total AS REAL)) as amount
+        FROM transactions
+        WHERE merchant_id = ? AND store_id = ? AND time >= ? AND time <= ? AND status = 'paid'
+        GROUP BY cashier_id
+    `).all(merchant_id, store_id, dayStart, dayEnd);
+
+    // 4. Hourly breakdown
+    const hourly = [];
+    for (let h = 0; h < 24; h++) {
+        const hStart = dayStart + h * 3600000;
+        const hEnd = hStart + 3600000;
+        const row = sqliteDb.prepare(`
+            SELECT COUNT(*) as count, COALESCE(SUM(CAST(total AS REAL)), 0) as amount
+            FROM transactions
+            WHERE merchant_id = ? AND store_id = ? AND time >= ? AND time < ? AND status = 'paid'
+        `).get(merchant_id, store_id, hStart, hEnd);
+        if (row && (row.count > 0 || row.amount > 0)) {
+            hourly.push({ hour: h, count: parseInt(row.count), amount: parseFloat(row.amount) });
+        }
+    }
+
+    // Generate HTML for PDF
+    const methodRows = byMethod.map(m =>
+        `<tr><td>${m.payment_method || '其他'}</td><td style="text-align:right;">${m.count}</td><td style="text-align:right;">¥${parseFloat(m.amount).toFixed(2)}</td></tr>`
+    ).join('');
+
+    const cashierRows = byCashier.map(c =>
+        `<tr><td>${c.cashier_id || '未知'}</td><td style="text-align:right;">${c.count}</td><td style="text-align:right;">¥${parseFloat(c.amount).toFixed(2)}</td></tr>`
+    ).join('');
+
+    const hourlyRows = hourly.map(h =>
+        `<tr><td>${String(h.hour).padStart(2, '0')}:00-${String(h.hour).padStart(2, '0')}:59</td><td style="text-align:right;">${h.count}</td><td style="text-align:right;">¥${h.amount.toFixed(2)}</td></tr>`
+    ).join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>日结单 - ${date}</title>
+    <style>
+        @page { size: A4; margin: 15mm; }
+        body { font-family: 'Noto Sans SC', sans-serif; font-size: 12px; color: #333; }
+        h1 { text-align: center; font-size: 20px; margin-bottom: 4px; }
+        .subtitle { text-align: center; color: #666; margin-bottom: 20px; }
+        .summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+        .summary-card { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 12px; text-align: center; }
+        .summary-card .value { font-size: 20px; font-weight: bold; color: #1989fa; }
+        .summary-card .label { font-size: 11px; color: #666; margin-top: 4px; }
+        .summary-card.danger .value { color: #ee0a24; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        th, td { padding: 6px 8px; border-bottom: 1px solid #e9ecef; text-align: left; }
+        th { background: #f8f9fa; font-weight: 600; font-size: 11px; }
+        .section-title { font-size: 14px; font-weight: 600; margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 2px solid #1989fa; }
+        .footer { text-align: center; color: #999; font-size: 10px; margin-top: 30px; padding-top: 10px; border-top: 1px solid #e9ecef; }
+    </style></head><body>
+    <h1>日 结 单</h1>
+    <div class="subtitle">门店：${store_id} | 日期：${date} | 生成时间：${new Date().toLocaleString('zh-CN')}</div>
+
+    <div class="summary-grid">
+        <div class="summary-card"><div class="value">¥${parseFloat(summary.total_sales).toFixed(2)}</div><div class="label">总销售额</div></div>
+        <div class="summary-card"><div class="value">${parseInt(summary.order_count)}</div><div class="label">订单总数</div></div>
+        <div class="summary-card danger"><div class="value">¥${parseFloat(summary.refund_amount).toFixed(2)}</div><div class="label">退款金额</div></div>
+    </div>
+
+    <div class="section-title">支付方式分布</div>
+    <table><thead><tr><th>支付方式</th><th style="text-align:right;">笔数</th><th style="text-align:right;">金额</th></tr></thead><tbody>${methodRows}</tbody></table>
+
+    <div class="section-title">收银员业绩</div>
+    <table><thead><tr><th>收银员</th><th style="text-align:right;">笔数</th><th style="text-align:right;">金额</th></tr></thead><tbody>${cashierRows}</tbody></table>
+
+    <div class="section-title">时段分布</div>
+    <table><thead><tr><th>时段</th><th style="text-align:right;">笔数</th><th style="text-align:right;">金额</th></tr></thead><tbody>${hourlyRows}</tbody></table>
+
+    <div class="footer">如意收银系统 | 本报告由系统自动生成</div>
+    </body></html>`;
+
+    // Return HTML (the frontend can use window.print() or a PDF library)
+    // For Electron, we can also use BrowserWindow.webContents.printToPDF()
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
 }));
 
 module.exports = router;

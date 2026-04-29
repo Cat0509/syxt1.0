@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>如意收银 - 初始化设置</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --surface: #fff;
+      --border: #e4e6eb;
+      --text: #1a1a1a;
+      --text-muted: #666;
+      --primary: #1989fa;
+      --primary-hover: #0d7de8;
+      --primary-light: rgba(25, 137, 250, 0.08);
+      --danger: #ee0a24;
+      --success: #07c160;
+      --radius: 8px;
+      --shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+      --font: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .wizard-container {
+      width: 480px;
+      max-width: 95vw;
+    }
+
+    .wizard-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .wizard-logo {
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, var(--primary), #36b5ff);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 28px;
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(25, 137, 250, 0.3);
+    }
+
+    .wizard-header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .wizard-header p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    /* 步骤指示器 */
+    .steps {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+
+    .step-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--border);
+      transition: all 0.3s;
+    }
+
+    .step-dot.active {
+      background: var(--primary);
+      width: 28px;
+      border-radius: 5px;
+    }
+
+    .step-dot.done {
+      background: var(--success);
+    }
+
+    /* 卡片 */
+    .wizard-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: var(--shadow);
+    }
+
+    .step-panel {
+      display: none;
+    }
+
+    .step-panel.active {
+      display: block;
+    }
+
+    .step-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: var(--text);
+    }
+
+    /* 表单 */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      font-family: var(--font);
+      color: var(--text);
+      transition: border-color 0.2s;
+      outline: none;
+    }
+
+    .form-group input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-light);
+    }
+
+    .form-group input::placeholder {
+      color: #bbb;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .form-row .form-group {
+      flex: 1;
+    }
+
+    .form-hint {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* 按钮 */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 20px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      font-weight: 500;
+      font-family: var(--font);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      width: 100%;
+      padding: 12px;
+      font-size: 1rem;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .btn-row .btn {
+      flex: 1;
+    }
+
+    /* 错误提示 */
+    .error-msg {
+      color: var(--danger);
+      font-size: 0.85rem;
+      margin-top: 12px;
+      display: none;
+    }
+
+    .error-msg.show {
+      display: block;
+    }
+
+    /* 成功页面 */
+    .success-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(7, 193, 96, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 36px;
+    }
+
+    .success-panel {
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .success-panel h2 {
+      font-size: 1.3rem;
+      margin-bottom: 8px;
+    }
+
+    .success-panel p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 4px;
+    }
+
+    /* 加载动画 */
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* 可选区域 */
+    .optional-section {
+      background: var(--bg);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-top: 8px;
+    }
+
+    .optional-section .form-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .optional-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      margin-bottom: 12px;
+      user-select: none;
+    }
+
+    .optional-toggle input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+  <div class="wizard-container">
+    <div class="wizard-header">
+      <div class="wizard-logo">如意</div>
+      <h1>欢迎使用如意收银</h1>
+      <p>首次使用，请完成以下配置即可开始</p>
+    </div>
+
+    <!-- 步骤指示器 -->
+    <div class="steps">
+      <div class="step-dot active" id="dot1"></div>
+      <div class="step-dot" id="dot2"></div>
+      <div class="step-dot" id="dot3"></div>
+    </div>
+
+    <div class="wizard-card">
+      <!-- 步骤1：商户与门店信息 -->
+      <div class="step-panel active" id="step1">
+        <div class="step-title">商户与门店信息</div>
+        <div class="form-group">
+          <label for="merchantName">商户名称</label>
+          <input type="text" id="merchantName" placeholder="例如：如意零售集团" autofocus>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="storeName">门店名称</label>
+            <input type="text" id="storeName" placeholder="例如：旗舰店">
+          </div>
+          <div class="form-group">
+            <label for="storeCode">门店编号</label>
+            <input type="text" id="storeCode" placeholder="例如：S001">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="deviceName">收银机名称</label>
+          <input type="text" id="deviceName" placeholder="例如：1号收银台" value="默认收银机">
+          <div class="form-hint">用于区分同一门店的多台收银设备</div>
+        </div>
+        <div class="error-msg" id="step1Error"></div>
+        <div class="btn-row">
+          <div></div>
+          <button class="btn btn-primary" onclick="goToStep(2)">下一步</button>
+        </div>
+      </div>
+
+      <!-- 步骤2：管理员账号 -->
+      <div class="step-panel" id="step2">
+        <div class="step-title">设置管理员账号</div>
+        <div class="form-group">
+          <label for="adminName">管理员姓名</label>
+          <input type="text" id="adminName" placeholder="您的真实姓名">
+        </div>
+        <div class="form-group">
+          <label for="adminUsername">登录账号</label>
+          <input type="text" id="adminUsername" placeholder="建议使用 admin">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="adminPassword">登录密码</label>
+            <input type="password" id="adminPassword" placeholder="至少6位字符">
+          </div>
+          <div class="form-group">
+            <label for="adminPassword2">确认密码</label>
+            <input type="password" id="adminPassword2" placeholder="再次输入密码">
+          </div>
+        </div>
+
+        <div class="optional-section">
+          <label class="optional-toggle">
+            <input type="checkbox" id="enableSync">
+            <span>启用总部同步（可选）</span>
+          </label>
+          <div id="syncOptions" style="display:none;">
+            <div class="form-group">
+              <label for="syncUrl">总部同步地址</label>
+              <input type="text" id="syncUrl" placeholder="例如：https://hq.example.com/api">
+              <div class="form-hint">填写后，门店数据将自动同步至总部</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="error-msg" id="step2Error"></div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="goToStep(1)">上一步</button>
+          <button class="btn btn-primary" id="btnSubmit" onclick="submitSetup()">完成初始化</button>
+        </div>
+      </div>
+
+      <!-- 步骤3：完成 -->
+      <div class="step-panel" id="step3">
+        <div class="success-panel">
+          <div class="success-icon">✅</div>
+          <h2>初始化完成！</h2>
+          <p>系统已准备就绪，正在启动收银界面...</p>
+          <p id="summaryInfo" style="margin-top:12px; font-size:0.82rem;"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3000/api/v1';
+    let currentStep = 1;
+
+    // 同步开关
+    document.getElementById('enableSync').addEventListener('change', (e) => {
+      document.getElementById('syncOptions').style.display = e.target.checked ? 'block' : 'none';
+    });
+
+    // 回车键支持
+    document.querySelectorAll('input').forEach(input => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (currentStep === 1) goToStep(2);
+          else if (currentStep === 2) submitSetup();
+        }
+      });
+    });
+
+    function goToStep(step) {
+      // 验证当前步骤
+      if (step === 2 && currentStep === 1) {
+        const merchantName = document.getElementById('merchantName').value.trim();
+        const storeName = document.getElementById('storeName').value.trim();
+        const errEl = document.getElementById('step1Error');
+
+        if (!merchantName) { errEl.textContent = '请输入商户名称'; errEl.classList.add('show'); return; }
+        if (!storeName) { errEl.textContent = '请输入门店名称'; errEl.classList.add('show'); return; }
+
+        errEl.classList.remove('show');
+      }
+
+      // 切换面板
+      document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+      document.getElementById('step' + step).classList.add('active');
+
+      // 更新步骤指示器
+      for (let i = 1; i <= 3; i++) {
+        const dot = document.getElementById('dot' + i);
+        dot.classList.remove('active', 'done');
+        if (i < step) dot.classList.add('done');
+        else if (i === step) dot.classList.add('active');
+      }
+
+      currentStep = step;
+    }
+
+    async function submitSetup() {
+      const adminName = document.getElementById('adminName').value.trim();
+      const adminUsername = document.getElementById('adminUsername').value.trim();
+      const adminPassword = document.getElementById('adminPassword').value;
+      const adminPassword2 = document.getElementById('adminPassword2').value;
+      const errEl = document.getElementById('step2Error');
+      const btn = document.getElementById('btnSubmit');
+
+      // 验证
+      if (!adminName) { errEl.textContent = '请输入管理员姓名'; errEl.classList.add('show'); return; }
+      if (!adminUsername) { errEl.textContent = '请输入登录账号'; errEl.classList.add('show'); return; }
+      if (adminPassword.length < 6) { errEl.textContent = '密码至少需要6位字符'; errEl.classList.add('show'); return; }
+      if (adminPassword !== adminPassword2) { errEl.textContent = '两次输入的密码不一致'; errEl.classList.add('show'); return; }
+
+      errEl.classList.remove('show');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>正在初始化...';
+
+      try {
+        const merchantName = document.getElementById('merchantName').value.trim();
+        const storeName = document.getElementById('storeName').value.trim();
+        const storeCode = document.getElementById('storeCode').value.trim();
+        const deviceName = document.getElementById('deviceName').value.trim() || '默认收银机';
+
+        // 生成设备ID
+        const deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+
+        const resp = await fetch(API_BASE + '/auth/init-setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            merchantName,
+            adminName,
+            username: adminUsername,
+            password: adminPassword,
+            storeName,
+            deviceId,
+            deviceName
+          })
+        });
+
+        const result = await resp.json();
+
+        if (result.code === 200) {
+          // 保存商户ID到 localStorage，供主窗口登录时自动填充
+          const merchantId = result.data && result.data.merchantId;
+          if (merchantId) {
+            localStorage.setItem('pos_merchant_id', merchantId);
+          }
+
+          // 保存同步配置（如果有）
+          if (document.getElementById('enableSync').checked) {
+            const syncUrl = document.getElementById('syncUrl').value.trim();
+            if (syncUrl) {
+              localStorage.setItem('pos_sync_url', syncUrl);
+            }
+          }
+
+          // 显示成功页面
+          document.getElementById('summaryInfo').textContent =
+            `商户：${merchantName} | 门店：${storeName}${storeCode ? ' (' + storeCode + ')' : ''} | 管理员：${adminUsername}`;
+          goToStep(3);
+
+          // 通知 Electron 主进程初始化完成
+          if (window.electronAPI && window.electronAPI.setupComplete) {
+            setTimeout(() => window.electronAPI.setupComplete(), 1500);
+          }
+        } else {
+          errEl.textContent = result.message || '初始化失败，请重试';
+          errEl.classList.add('show');
+          btn.disabled = false;
+          btn.textContent = '完成初始化';
+        }
+      } catch (err) {
+        errEl.textContent = '网络错误，请确认后端服务已启动：' + err.message;
+        errEl.classList.add('show');
+        btn.disabled = false;
+        btn.textContent = '完成初始化';
+      }
+    }
+  </script>
+</body>
+</html>

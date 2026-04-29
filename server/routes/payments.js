@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const syncService = require('../sync_service');
 const { ApiResponse, asyncHandler } = require('../utils');
 const { authenticate } = require('../middleware/auth');
 const { requireActiveUser } = require('../middleware/rbac');
@@ -16,7 +17,7 @@ async function markOrderPaid({ orderId, paymentId, method, amount, source, store
         await conn.beginTransaction();
 
         const [orders] = await conn.execute(
-            'SELECT id, merchant_id, store_id, total, status, payment_status, payment_method FROM transactions WHERE id = ? FOR UPDATE',
+            'SELECT id, merchant_id, store_id, total, status, payment_status, payment_method FROM transactions WHERE id = ?',
             [orderId]
         );
 
@@ -29,12 +30,12 @@ async function markOrderPaid({ orderId, paymentId, method, amount, source, store
         // 1. Record this specific payment
         const pid = paymentId || ('pay_' + require('../id_utils').generateId().replace(/-/g, ''));
         const effectiveMerchantId = merchantId || order.merchant_id;
-        const effectiveStoreId = storeId || order.store_id;
+        const effectiveStoreId = storeId || order.store_id || req.user.store_id;
 
         await conn.execute(
             `INSERT INTO order_payments (id, merchant_id, store_id, order_id, method, amount, status, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE status=VALUES(status)`,
+             ON CONFLICT(id) DO UPDATE SET status = excluded.status`,
             [pid, effectiveMerchantId, effectiveStoreId, orderId, method || 'scan', amount || 0, 'success', Date.now()]
         );
 
@@ -85,6 +86,17 @@ async function markOrderPaid({ orderId, paymentId, method, amount, source, store
 
         await conn.commit();
         conn.release();
+
+        // Enqueue payment for sync
+        syncService.enqueue({
+            merchant_id: effectiveMerchantId,
+            store_id: effectiveStoreId,
+            entity_type: 'payment',
+            entity_id: pid,
+            operation: 'create',
+            payload: { payment_id: pid, order_id: orderId, method, amount, total_paid: totalPaid, source }
+        });
+
         return { alreadyPaid: totalPaid >= Number(order.total), order, totalPaid };
     } catch (err) {
         await conn.rollback();

@@ -9,6 +9,14 @@ function formatMessage(level, message) {
 }
 
 const logger = {
+    debug: (msg) => {
+        // Only log debug messages when DEBUG env is set
+        if (process.env.DEBUG) {
+            const fullMsg = formatMessage('debug', msg);
+            console.log(fullMsg.trim());
+            fs.appendFileSync(logFile, fullMsg);
+        }
+    },
     info: (msg) => {
         const fullMsg = formatMessage('info', msg);
         console.log(fullMsg.trim());

@@ -432,6 +432,36 @@
             </div>
           </div>
 
+          <div class="settings-card"
+            style="background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; margin-bottom:1.5rem;">
+            <h3>🖨️ 小票打印设置</h3>
+            <p style="color:var(--text-muted); margin-bottom:1rem;">
+              配置打印小票时显示的店铺信息。
+            </p>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.8rem;">
+              <div>
+                <label style="font-size:0.85rem; color:var(--text-muted); display:block; margin-bottom:4px;">店铺名称</label>
+                <input type="text" id="receiptStoreName" placeholder="如意便利店" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius); font-size:0.9rem;">
+              </div>
+              <div>
+                <label style="font-size:0.85rem; color:var(--text-muted); display:block; margin-bottom:4px;">联系电话</label>
+                <input type="text" id="receiptStorePhone" placeholder="400-123-4567" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius); font-size:0.9rem;">
+              </div>
+              <div style="grid-column:1/-1;">
+                <label style="font-size:0.85rem; color:var(--text-muted); display:block; margin-bottom:4px;">店铺地址</label>
+                <input type="text" id="receiptStoreAddr" placeholder="XX市XX区XX路XX号" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius); font-size:0.9rem;">
+              </div>
+              <div style="grid-column:1/-1;">
+                <label style="font-size:0.85rem; color:var(--text-muted); display:block; margin-bottom:4px;">小票页脚文字</label>
+                <input type="text" id="receiptFooter" placeholder="感谢惠顾，欢迎再次光临！" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius); font-size:0.9rem;">
+              </div>
+            </div>
+            <div style="margin-top:1rem; display:flex; gap:0.8rem;">
+              <button id="btnSaveReceiptConfig" class="btn btn-primary" style="flex:1;">保存设置</button>
+              <button id="btnPreviewReceipt" class="btn btn-outline" style="flex:1; border:1px solid var(--primary); color:var(--primary); background:transparent;">预览小票</button>
+            </div>
+          </div>
+
           <div class="settings-footer" style="text-align:center; color:var(--text-muted); margin-top:3rem;">
             <p>如意收银系统 v1.0</p>
           </div>
@@ -555,6 +585,9 @@
           <select id="storeSwitcher" class="store-select">
             <!-- 动态加载门店列表 -->
           </select>
+        </div>
+        <div id="currentStoreDisplay" class="current-store-display" style="display:none;">
+          当前门店：<strong id="currentStoreName">--</strong>
         </div>
       </div>
       <div class="nav-menu">

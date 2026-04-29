@@ -95,6 +95,19 @@ body {
   box-shadow: 0 0 0 3px rgba(25, 137, 250, 0.1);
 }
 
+.current-store-display {
+  padding: 6px 0.75rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+.current-store-display strong {
+  color: var(--primary);
+  font-weight: 600;
+}
+
 .nav-sidebar .nav-menu {
   flex: 1;
   padding: 1rem 0;
