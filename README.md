@@ -1,4 +1,4 @@
-# 如意收银系统 6.0
+# 如意收银系统 1.0
 
 如意收银系统 6.0 是基于 Electron + Node.js + SQLite 的门店端 POS 收银系统。当前版本已从早期 MySQL 后端改造为本地 SQLite 存储，并将后端服务改为由 Electron 主进程直接启动，客户电脑不需要安装 Node.js、npm、MySQL、Python 或 Visual Studio Build Tools。
 
