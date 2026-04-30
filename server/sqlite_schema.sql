@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS _migrations (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS merchants (
     id TEXT PRIMARY KEY,
+    code TEXT UNIQUE,
     name TEXT NOT NULL,
     contact_phone TEXT,
     status TEXT DEFAULT 'active' CHECK(status IN ('active', 'suspended', 'expired')),

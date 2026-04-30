@@ -505,6 +505,10 @@
         if (result.code === 200) {
           // 保存商户ID到 localStorage，供主窗口登录时自动填充
           const merchantId = result.data && result.data.merchantId;
+          const merchantCode = result.data && result.data.merchantCode;
+          if (merchantCode || merchantId) {
+            localStorage.setItem('pos_merchant_code', merchantCode || merchantId);
+          }
           if (merchantId) {
             localStorage.setItem('pos_merchant_id', merchantId);
           }

@@ -803,6 +803,14 @@ class POSApp {
 
   async checkInitializationStatus() {
     const resp = await SyncManager.request('/auth/init-status');
+    if (resp.code === 200 && resp.data) {
+      if (resp.data.merchantCode || resp.data.merchantId) {
+        localStorage.setItem('pos_merchant_code', resp.data.merchantCode || resp.data.merchantId);
+      }
+      if (resp.data.merchantId) {
+        localStorage.setItem('pos_merchant_id', resp.data.merchantId);
+      }
+    }
     if (resp.code === 200 && resp.data.initialized === false) {
       this.dom.initOverlay.style.display = 'flex';
       document.getElementById('loginOverlay').classList.remove('show');
@@ -819,7 +827,7 @@ class POSApp {
     if (!this.currentUser || !this.currentUser.token) {
       document.getElementById('loginOverlay').classList.add('show');
       // Auto-fill merchant ID from localStorage (set by setup wizard)
-      const savedMerchantId = localStorage.getItem('pos_merchant_id');
+      const savedMerchantId = localStorage.getItem('pos_merchant_code') || localStorage.getItem('pos_merchant_id');
       const merchantEl = document.getElementById('merchantId');
       if (savedMerchantId && merchantEl && !merchantEl.value) {
         merchantEl.value = savedMerchantId;
@@ -935,6 +943,9 @@ class POSApp {
       // 1. Save initial token/user
       this.currentUser = result.data;
       localStorage.setItem('pos_user', JSON.stringify(this.currentUser));
+      if (result.data.merchant_code) {
+        localStorage.setItem('pos_merchant_code', result.data.merchant_code);
+      }
 
       // 2. Fetch full profile via /me to ensure context is correct
       const meResult = await SyncManager.getMe();
@@ -990,6 +1001,9 @@ class POSApp {
 
     if (result.code === 200) {
       // Save merchant ID for auto-fill on login page
+      if (result.data && (result.data.merchantCode || result.data.merchantId)) {
+        localStorage.setItem('pos_merchant_code', result.data.merchantCode || result.data.merchantId);
+      }
       if (result.data && result.data.merchantId) {
         localStorage.setItem('pos_merchant_id', result.data.merchantId);
       }

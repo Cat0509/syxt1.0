@@ -1,13 +1,10 @@
 const jwt = require('jsonwebtoken');
 const { ApiResponse } = require('../utils');
+const { getJwtSecret } = require('../security_config');
 
 // Middleware to verify JWT token
 const authenticate = (req, res, next) => {
-    const JWT_SECRET = (process.env.JWT_SECRET || '').trim();
-    if (!JWT_SECRET) {
-        console.error('FATAL ERROR: JWT_SECRET environment variable is not set.');
-        return ApiResponse.error(res, 'Internal Server Error', 500);
-    }
+    const JWT_SECRET = getJwtSecret();
     // Check header or url parameters or post parameters for token
     const authHeader = req.headers['authorization'];
     console.log('DEBUG: Full authHeader:', authHeader);
@@ -30,7 +27,7 @@ const authenticate = (req, res, next) => {
 };
 
 const generateToken = (user) => {
-    const JWT_SECRET = (process.env.JWT_SECRET || '').trim();
+    const JWT_SECRET = getJwtSecret();
     return jwt.sign(
         {
             id: user.id,

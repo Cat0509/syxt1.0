@@ -51,6 +51,43 @@ function getDb() {
     return db;
 }
 
+function hasColumn(tableName, columnName) {
+    return db.prepare(`PRAGMA table_info(${tableName})`).all()
+        .some((column) => column.name === columnName);
+}
+
+function generateNextMerchantCode() {
+    const rows = db.prepare('SELECT code FROM merchants WHERE code IS NOT NULL').all();
+    const used = new Set(rows.map((row) => String(row.code)));
+    let next = 100001;
+
+    while (used.has(String(next))) {
+        next += 1;
+    }
+
+    return String(next);
+}
+
+function ensureMerchantCodeSchema() {
+    if (!hasColumn('merchants', 'code')) {
+        db.prepare('ALTER TABLE merchants ADD COLUMN code TEXT').run();
+    }
+
+    db.prepare(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_merchants_code ON merchants(code) WHERE code IS NOT NULL'
+    ).run();
+
+    const merchants = db.prepare(
+        'SELECT id, code FROM merchants ORDER BY created_at ASC, id ASC'
+    ).all();
+
+    for (const merchant of merchants) {
+        if (merchant.code) continue;
+        db.prepare('UPDATE merchants SET code = ? WHERE id = ?')
+            .run(generateNextMerchantCode(), merchant.id);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Mock connection object for route-level transactions
 // ---------------------------------------------------------------------------
@@ -131,6 +168,8 @@ function init() {
         db.exec(schema);
         console.log('[DB] Schema applied successfully.');
     }
+
+    ensureMerchantCodeSchema();
 
     return db;
 }
@@ -220,17 +259,34 @@ async function getMerchantCount() {
     return row.count;
 }
 
+async function getMerchantByLoginCode(loginCode) {
+    const code = String(loginCode || '').trim();
+    if (!code) return undefined;
+
+    return getDb().prepare(
+        'SELECT * FROM merchants WHERE id = ? OR code = ?'
+    ).get(code, code) || undefined;
+}
+
+async function getPrimaryMerchant() {
+    return getDb().prepare(
+        'SELECT * FROM merchants ORDER BY created_at ASC, id ASC LIMIT 1'
+    ).get() || undefined;
+}
+
 async function saveMerchant(merchant) {
-    const { id, name, contact_phone, status } = merchant;
+    const { id, code, name, contact_phone, status } = merchant;
     const mid = id || generateId();
+    const merchantCode = code || generateNextMerchantCode();
     getDb().prepare(
-        `INSERT INTO merchants (id, name, contact_phone, status, created_at)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO merchants (id, code, name, contact_phone, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET name = excluded.name,
+             code = excluded.code,
              contact_phone = excluded.contact_phone,
              status = excluded.status`
-    ).run(mid, name, contact_phone || '', status || 'active', Date.now());
-    return { ...merchant, id: mid };
+    ).run(mid, merchantCode, name, contact_phone || '', status || 'active', Date.now());
+    return { ...merchant, id: mid, code: merchantCode };
 }
 
 // ===========================================================================
@@ -661,7 +717,10 @@ module.exports = {
     withTransaction,
     getStoreList,
     saveStore,
+    generateNextMerchantCode,
     getMerchantCount,
+    getMerchantByLoginCode,
+    getPrimaryMerchant,
     saveMerchant,
     getProducts,
     saveProduct,

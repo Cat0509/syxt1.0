@@ -31,6 +31,8 @@ server/app.log
 
 # Server dev artifacts
 server/d_/
+server/.runtime/
+jwt_secret
 server/*_output.txt
 server/*_state.json
 server/server_error.txt

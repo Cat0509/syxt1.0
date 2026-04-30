@@ -18,7 +18,8 @@ router.post('/login', asyncHandler(async (req, res) => {
         return ApiResponse.error(res, '请输入商户号、用户名和密码', 400, 400);
     }
 
-    const actualMerchantId = merchantId;
+    const merchant = await db.getMerchantByLoginCode(merchantId);
+    const actualMerchantId = merchant ? merchant.id : merchantId;
     const now = Date.now();
 
     const user = await db.getUserByUsername(username, actualMerchantId);
@@ -27,6 +28,8 @@ router.post('/login', asyncHandler(async (req, res) => {
     if (!user || user.status !== 'active') {
         return ApiResponse.error(res, '用户名或密码错误，或账号已停用', 401, 401);
     }
+
+    user.merchant_code = merchant && merchant.code ? merchant.code : actualMerchantId;
 
     // Check if account is locked
     const failCount = Number(user.fail_count || 0);
@@ -97,12 +100,8 @@ router.post('/login', asyncHandler(async (req, res) => {
 
     // Generate JWT token
     const token = generateToken(user);
-
-    // 不返回密码
-    const { password: _, password_hash: __, fail_count: ___, lock_until: ____, ...userInfo } = user;
-
-    // 返回带 token 的结果
-    ApiResponse.success(res, { ...userInfo, token }, '登录成功');
+    const { password: removedPassword, password_hash: removedPasswordHash, fail_count: removedFailCount, lock_until: removedLockUntil, ...safeUserInfo } = user;
+    return ApiResponse.success(res, { ...safeUserInfo, token }, '登录成功');
 }));
 
 // 修改本人密码
@@ -163,7 +162,12 @@ async function checkFullyInitialized() {
 // 获取系统初始化状态
 router.get('/init-status', asyncHandler(async (req, res) => {
     const fullyInitialized = await checkFullyInitialized();
-    ApiResponse.success(res, { initialized: fullyInitialized });
+    const merchant = fullyInitialized ? await db.getPrimaryMerchant() : null;
+    ApiResponse.success(res, {
+        initialized: fullyInitialized,
+        merchantId: merchant ? merchant.id : null,
+        merchantCode: merchant ? merchant.code : null
+    });
 }));
 
 // 系统初始化接口 (保证原子性)
@@ -190,9 +194,10 @@ router.post('/init-setup', asyncHandler(async (req, res) => {
 
             // 1. 创建商户
             const mid = require('../id_utils').generateId();
+            const merchantCode = db.generateNextMerchantCode();
             await conn.execute(
-                'INSERT INTO merchants (id, name, status, created_at) VALUES (?, ?, ?, ?)',
-                [mid, merchantName, 'active', Date.now()]
+                'INSERT INTO merchants (id, code, name, status, created_at) VALUES (?, ?, ?, ?, ?)',
+                [mid, merchantCode, merchantName, 'active', Date.now()]
             );
 
             // 2. 创建第一家门店
@@ -216,7 +221,7 @@ router.post('/init-setup', asyncHandler(async (req, res) => {
                 [deviceId, deviceName || '首台收银机', sid, 'active', Date.now(), Date.now()]
             );
 
-            return { merchantId: mid, adminId: uid };
+            return { merchantId: mid, merchantCode, adminId: uid };
         });
 
         ApiResponse.success(res, result, '系统初始化成功');
