@@ -42,6 +42,7 @@ function startBackend() {
         fs.mkdirSync(dataDir, { recursive: true });
     }
 
+    process.env.RUYI_RUNTIME_DIR = process.env.RUYI_RUNTIME_DIR || dataDir;
     process.env.PORT = process.env.PORT || '3000';
     process.env.DB_PATH = process.env.DB_PATH || path.join(dataDir, 'data.db');
     process.env.BACKUP_DIR = process.env.BACKUP_DIR || path.join(dataDir, 'backups');

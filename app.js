@@ -329,10 +329,11 @@ class SyncManager {
     return false;
   }
 
-  static async syncProducts(products) {
+  static async syncProducts(products, storeId = null) {
+    const body = storeId ? { products, store_id: storeId } : { products };
     return this.request('/products/sync', {
       method: 'POST',
-      body: JSON.stringify({ products })
+      body: JSON.stringify(body)
     });
   }
 
@@ -770,7 +771,8 @@ class POSApp {
       remainingAmountEl: document.getElementById('remainingAmount'),
       mixPaymentMethod: document.getElementById('mixPaymentMethod'),
       mixPaymentAmount: document.getElementById('mixPaymentAmount'),
-      btnAddPaymentLine: document.getElementById('btnAddPaymentLine')
+      btnAddPaymentLine: document.getElementById('btnAddPaymentLine'),
+      initOverlay: document.getElementById('initOverlay')
     };
   }
 
@@ -1248,7 +1250,10 @@ class POSApp {
     }
 
     // 1. 推送本地商品数据 (考虑到 SaaS 改造，未来可能也改为实时 API)
-    const pResult = await SyncManager.syncProducts(this.products);
+    const syncStoreId = this.currentStoreId || this.currentUser?.store_id || null;
+    const pResult = syncStoreId
+      ? await SyncManager.syncProducts(this.products, syncStoreId)
+      : { code: 200 };
 
     // 2. 拉取云端完整交易记录，保持历史页与统计页口径一致
     const cloudTxs = await SyncManager.fetchCloudOrders({
@@ -2696,7 +2701,7 @@ class POSApp {
 
     saveProducts(this.products);
 
-    const syncResult = await SyncManager.syncProducts(this.products);
+    const syncResult = await SyncManager.syncProducts(this.products, inventoryStoreId);
     if (syncResult.code !== 200) {
       alert('商品同步失败：' + (syncResult.message || '请稍后重试'));
       return;
@@ -3481,7 +3486,10 @@ class POSApp {
     });
     if (changed) {
       saveProducts(this.products);
-      SyncManager.syncProducts(this.products);
+      const syncStoreId = this.currentStoreId || this.currentUser?.store_id || null;
+      if (syncStoreId) {
+        SyncManager.syncProducts(this.products, syncStoreId);
+      }
     }
   }
 
