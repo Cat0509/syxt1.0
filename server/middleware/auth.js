@@ -7,7 +7,6 @@ const authenticate = (req, res, next) => {
     const JWT_SECRET = getJwtSecret();
     // Check header or url parameters or post parameters for token
     const authHeader = req.headers['authorization'];
-    console.log('DEBUG: Full authHeader:', authHeader);
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
     if (!token) {
