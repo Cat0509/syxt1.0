@@ -66,6 +66,20 @@ function formatPrice(price) {
   return Number(price || 0).toFixed(2);
 }
 
+function formatOrderDisplay(tx) {
+  const raw = typeof tx === 'string' ? tx : String(tx?.order_no || tx?.id || '');
+  const match = raw.match(/(\d{8}-\d{4})$/);
+  if (match) return `订单 ${match[1]}`;
+  if (raw.length > 18) return `订单 ${raw.slice(-12)}`;
+  return raw || '订单';
+}
+
+function getEditableProductStock(product) {
+  const singleSku = product?.skus && product.skus.length === 1 ? product.skus[0] : null;
+  const stock = singleSku && singleSku.stock !== undefined ? singleSku.stock : product?.stock;
+  return stock !== undefined ? parseInt(stock) || 0 : 0;
+}
+
 function showToast(elementId, duration = TOAST_DURATION_MS) {
   const toast = document.getElementById(elementId);
   if (!toast) return;
@@ -1394,6 +1408,12 @@ class POSApp {
     const now = new Date();
     if (!startObj.value) startObj.value = now.toISOString().split('T')[0];
     if (!endObj.value) endObj.value = now.toISOString().split('T')[0];
+    endObj.min = startObj.value;
+    if (endObj.value < startObj.value) {
+      alert('结束日期不能早于开始日期');
+      endObj.value = startObj.value;
+      return;
+    }
 
     const filters = {
       store_id: this.currentStoreId,
@@ -1433,6 +1453,12 @@ class POSApp {
   async renderReconciliationDetails(storeId) {
     const startObj = document.getElementById('reconStartDate');
     const endObj = document.getElementById('reconEndDate');
+    endObj.min = startObj.value;
+    if (endObj.value < startObj.value) {
+      alert('结束日期不能早于开始日期');
+      endObj.value = startObj.value;
+      return;
+    }
     
     const filters = {
       store_id: storeId,
@@ -1449,7 +1475,7 @@ class POSApp {
     } else {
       tbody.innerHTML = data.map(o => `
         <tr>
-          <td style="font-size:0.8rem;">${o.id}</td>
+          <td style="font-size:0.8rem;" title="${escapeHtml(o.id)}">${escapeHtml(formatOrderDisplay(o.id))}</td>
           <td style="color:#666; font-size:0.75rem;">${new Date(o.time).toLocaleString()}</td>
           <td>¥${formatPrice(o.receivable)}</td>
           <td>¥${formatPrice(o.actual)}</td>
@@ -2011,7 +2037,7 @@ class POSApp {
             <div class="history-item" data-id="${tx.id}">
               <div class="history-header">
                 <div class="history-header-left">
-                  <span class="history-id">${tx.order_no || tx.id}</span>
+                  <span class="history-id" title="${escapeHtml(tx.order_no || tx.id)}">${escapeHtml(formatOrderDisplay(tx))}</span>
                   <span class="history-time">${dateStr} ${timeStr}</span>
                 </div>
                 <div class="history-header-right" style="display:flex; align-items:center;">
@@ -2127,7 +2153,7 @@ class POSApp {
           <div class="history-item" data-id="${r.id}">
             <div class="history-header">
               <div class="history-header-left">
-                <span class="history-id">订单号: ${r.order_id}</span>
+                <span class="history-id" title="${escapeHtml(r.order_id)}">订单号: ${escapeHtml(formatOrderDisplay(r.order_id))}</span>
                 <span class="history-time">${dateStr}</span>
               </div>
               <div class="history-header-right">
@@ -2238,7 +2264,8 @@ class POSApp {
       const id = row.dataset.id;
       const [minusBtn, plusBtn] = row.querySelectorAll('.qty-btn');
       const qtyInput = row.querySelector('.qty-input');
-      const item = this.cart.find((c) => c.product.id === id);
+      const item = this.cart.find((c) => c.skuId === id);
+      if (!item) return;
 
       minusBtn.addEventListener('click', () => this.setCartQty(id, item.qty - 1));
       plusBtn.addEventListener('click', () => this.setCartQty(id, item.qty + 1));
@@ -2603,7 +2630,7 @@ class POSApp {
     if (this.editingProductId) {
       const p = this.products.find((x) => x.id === this.editingProductId);
       if (p) {
-        const oldStock = p.stock !== undefined ? parseInt(p.stock) || 0 : 0;
+        const oldStock = getEditableProductStock(p);
         p.name = name;
         p.price = price;
         p.stock = stock;
@@ -2618,8 +2645,10 @@ class POSApp {
 
         const delta = stock - oldStock;
         if (delta !== 0) {
+          const singleSku = p.skus && p.skus.length === 1 ? p.skus[0] : null;
           inventoryAdjustment = {
             product_id: p.id,
+            sku_id: singleSku ? singleSku.id : undefined,
             qty: delta,
             reason: 'product_form_edit'
           };
@@ -2641,7 +2670,7 @@ class POSApp {
 
       if (existingProduct) {
         // 合并库存并更新信息
-        const oldStock = existingProduct.stock !== undefined ? parseInt(existingProduct.stock) : 0;
+        const oldStock = getEditableProductStock(existingProduct);
         existingProduct.stock = oldStock + stock;
         existingProduct.price = price; // 更新为最新价格
         existingProduct.category = category;
@@ -2664,6 +2693,7 @@ class POSApp {
         if (stock !== 0) {
           inventoryAdjustment = {
             product_id: existingProduct.id,
+            sku_id: existingProduct.skus && existingProduct.skus.length === 1 ? existingProduct.skus[0].id : undefined,
             qty: stock,
             reason: 'product_form_add_stock'
           };
@@ -2711,6 +2741,7 @@ class POSApp {
       const adjustResult = await SyncManager.adjustInventory({
         store_id: inventoryStoreId,
         product_id: inventoryAdjustment.product_id,
+        sku_id: inventoryAdjustment.sku_id,
         qty: inventoryAdjustment.qty,
         reason: inventoryAdjustment.reason
       });
@@ -2744,7 +2775,7 @@ class POSApp {
 
     document.getElementById('productName').value = product.name;
     document.getElementById('productPrice').value = product.price;
-    document.getElementById('productStock').value = product.stock !== undefined ? product.stock : 9999;
+    document.getElementById('productStock').value = getEditableProductStock(product);
     document.getElementById('productBarcode').value = product.barcode || '';
 
     const cats = Array.from(this.dom.productCategorySelect.options).map(o => o.value);
@@ -2962,6 +2993,12 @@ class POSApp {
     this.dom.btnInventoryAdjust?.addEventListener('click', () => this.openInventoryAdjustModal());
     this.dom.btnCancelAdjust?.addEventListener('click', () => this.dom.inventoryAdjustModal?.classList.remove('show'));
     this.dom.inventoryAdjustForm?.addEventListener('submit', (e) => { e.preventDefault(); this.handleInventoryAdjust(); });
+    document.getElementById('reconStartDate')?.addEventListener('change', (e) => {
+      const end = document.getElementById('reconEndDate');
+      if (!end) return;
+      end.min = e.target.value;
+      if (end.value && end.value < e.target.value) end.value = e.target.value;
+    });
     document.getElementById('adjustProductSearch')?.addEventListener('input', (e) => this.onAdjustProductSearch(e.target.value));
 
     this.dom.productsGrid?.addEventListener('click', (e) => {
@@ -3234,7 +3271,7 @@ class POSApp {
           ${storeAddr ? `<p style="margin:2px 0;color:#555;">${storeAddr}</p>` : ''}
         </div>
         <div style="border-top:1px dashed #333;border-bottom:1px dashed #333;padding:6px 0;margin:6px 0;">
-          <div style="display:flex;justify-content:space-between;"><span>订单号:</span><span>${(tx.order_no || tx.id || '').substring(0, 16)}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span>订单号:</span><span>${escapeHtml(formatOrderDisplay(tx))}</span></div>
           <div style="display:flex;justify-content:space-between;"><span>时间:</span><span>${dateStr}</span></div>
           ${(tx.cashier_id || tx.processed_by) ? `<div style="display:flex;justify-content:space-between;"><span>收银员:</span><span>${tx.cashier_id || tx.processed_by || ''}</span></div>` : ''}
         </div>

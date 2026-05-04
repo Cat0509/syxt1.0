@@ -85,7 +85,7 @@ router.post('/adjust', authenticate, requireActiveUser, requireRole(['merchant_a
                 `INSERT INTO inventory (id, merchant_id, store_id, product_id, sku_id, stock, updated_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?)
                  ON CONFLICT(id) DO UPDATE SET stock = stock + excluded.stock, updated_at = excluded.updated_at`,
-                [`inv_s_${sku_id}_${target_store_id}`, merchant_id, target_store_id, finalProductId, sku_id, qty, Date.now(), qty, Date.now()]
+                [`inv_s_${sku_id}_${target_store_id}`, merchant_id, target_store_id, finalProductId, sku_id, qty, Date.now()]
             );
             
         } else if (product_id) {
@@ -105,7 +105,7 @@ router.post('/adjust', authenticate, requireActiveUser, requireRole(['merchant_a
                 `INSERT INTO inventory (id, merchant_id, store_id, product_id, sku_id, stock, updated_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?)
                  ON CONFLICT(id) DO UPDATE SET stock = stock + excluded.stock, updated_at = excluded.updated_at`,
-                [`inv_p_${product_id}_${target_store_id}`, merchant_id, target_store_id, product_id, '', qty, Date.now(), qty, Date.now()]
+                [`inv_p_${product_id}_${target_store_id}`, merchant_id, target_store_id, product_id, '', qty, Date.now()]
             );
         }
 
